@@ -9,7 +9,7 @@ app = dash.Dash(__name__)
 
 # Layout of the dashboard
 app.layout = html.Div([
-    html.H1("Compound Interest Calculator"),
+    html.H1("Compound Interest Ivestment Calculator"),
     
     # Sliders & Input boxes
     html.Label("Investment Time (in years)"),
@@ -43,24 +43,15 @@ app.layout = html.Div([
     ]),
     
     # Plot
-    dcc.Graph(id='compound-plot')
+    dcc.Graph(id='compound-plot'),
+html.Div([
+    html.H3(id='final-balance-display', children='', style={'textAlign': 'center'}),
+    html.H3(id='comparison-display', children='', style={'textAlign': 'center'})
+], style={'textAlign': 'center'})
+
 ])
 
-# Callback function to update the plot
-@app.callback(
-    Output('compound-plot', 'figure'),
-    [
-        Input('investmentTime-slider', 'value'),
-        Input('yieldRate-input', 'value'),
-        Input('initialContribution-input', 'value'),
-        Input('monthlyContributions-input', 'value'),
-        Input('yearlyGainOnContributions-input', 'value'),
-        Input('expectedInflation-input', 'value')
-    ]
-)
-def update_plot(investmentTime, yieldRate, initialContribution, monthlyContributions, yearlyGainOnContributions, expectedInflation):
-    
-    def compound_interest_over_time(initialContribution,
+def compound_interest_over_time(initialContribution,
                                 monthlyContributions,
                                 yieldRate,
                                 investmentTime,
@@ -86,6 +77,7 @@ def update_plot(investmentTime, yieldRate, initialContribution, monthlyContribut
 
         investmentTime *= 12 # converting years to months    
         for month in range(1, investmentTime):
+            # ------ Row by row calculation
             local_balance = final_balance[-1]
             local_interest = local_balance * monthly_rate
             local_inflation = local_balance * monthly_inflation
@@ -114,6 +106,20 @@ def update_plot(investmentTime, yieldRate, initialContribution, monthlyContribut
             'Monthly Investment': current_contribution,
             'Final Balance': final_balance
                             })
+
+# Callback function to update the plot
+@app.callback(
+    Output('compound-plot', 'figure'),
+    [
+        Input('investmentTime-slider', 'value'),
+        Input('yieldRate-input', 'value'),
+        Input('initialContribution-input', 'value'),
+        Input('monthlyContributions-input', 'value'),
+        Input('yearlyGainOnContributions-input', 'value'),
+        Input('expectedInflation-input', 'value')
+    ]
+)
+def update_plot(investmentTime, yieldRate, initialContribution, monthlyContributions, yearlyGainOnContributions, expectedInflation):
 
     
     df = compound_interest_over_time(initialContribution,
@@ -144,7 +150,7 @@ def update_plot(investmentTime, yieldRate, initialContribution, monthlyContribut
     trace = go.Scatter(x=df['Months'], 
                        y=df['Final Balance'], 
                        mode='lines', 
-                       name='Your Investment Return',
+                       name='Your Investment',
                        text=df['Current Year'],
                        hovertemplate='Month: %{x}<br>Final Balance: %{y}<br>Current Year: %{text}')
     trace2 = go.Scatter(x=df_Treasury['Months'], 
@@ -169,6 +175,54 @@ def update_plot(investmentTime, yieldRate, initialContribution, monthlyContribut
     layout = go.Layout(title="Compound Interest Over Time", xaxis=dict(title="Time in Months"), yaxis=dict(title="Amount"))
     
     return {'data': [trace, trace2, trace3, trace4], 'layout': layout}
+
+# Callback function to update text summary
+@app.callback(
+    [Output('final-balance-display', 'children'),
+     Output('final-balance-display', 'style'),
+     Output('comparison-display', 'children'),
+     Output('comparison-display', 'style')],
+    [
+        Input('investmentTime-slider', 'value'),
+        Input('yieldRate-input', 'value'),
+        Input('initialContribution-input', 'value'),
+        Input('monthlyContributions-input', 'value'),
+        Input('yearlyGainOnContributions-input', 'value'),
+        Input('expectedInflation-input', 'value')
+    ]
+)
+def update_display_values(investmentTime, yieldRate, initialContribution, monthlyContributions, yearlyGainOnContributions, expectedInflation):
+    df = compound_interest_over_time(initialContribution,
+                                     monthlyContributions,
+                                     yieldRate,
+                                     investmentTime,
+                                     yearlyGainOnContributions,
+                                     expectedInflation)
+    df_stocks10 = compound_interest_over_time(initialContribution,
+                                              monthlyContributions,
+                                              yieldRate=12.39,
+                                              investmentTime=investmentTime,
+                                              yearlyGainOnContributions=yearlyGainOnContributions,
+                                              expectedInflation=expectedInflation)
+    
+    final_balance = df['Final Balance'].iloc[-1]
+    stock_balance = df_stocks10['Final Balance'].iloc[-1]
+    difference = final_balance - stock_balance
+
+    # Define content and style for the final balance display
+    final_balance_content = f"Your Final Balance: ${final_balance:,.2f}"
+    final_balance_style = {'fontSize': '24px', 'fontWeight': 'bold'}
+
+    # Define content and style for the comparison display
+    comparison_content = f"Difference compared to average stock market (last 10 years): ${difference:,.2f}"
+    comparison_style = {
+        'fontSize': '24px',
+        'fontWeight': 'bold',
+        'color': 'green' if difference >= 0 else 'red'
+    }
+
+    return final_balance_content, final_balance_style, comparison_content, comparison_style
+
 
 if __name__ == '__main__':
     app.run_server(debug=True)
