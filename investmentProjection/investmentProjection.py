@@ -7,48 +7,80 @@ import pandas as pd
 
 app = dash.Dash(__name__)
 
-# Layout of the dashboard
-app.layout = html.Div([
-    html.H1("Compound Interest Ivestment Calculator"),
+# External stylesheets to make it prettier
+external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+
+app.layout = html.Div(style={
+    'fontFamily': 'Arial, sans-serif',
+    'margin': '50px',
+    'padding': '10px',
+    'border': '1px solid #ddd',
+    'borderRadius': '5px',
+    'boxShadow': '2px 2px 20px #aaa'
+}, children=[
+    html.H1("Compound Interest Investment Calculator", style={
+        'textAlign': 'center',
+        'marginBottom': '30px'
+    }),
     
     # Sliders & Input boxes
-    html.Label("Investment Time (in years)"),
-    dcc.Slider(
-        id='investmentTime-slider',
-        min=1,
-        max=50,
-        value=20,
-        marks={i: '{}'.format(i) for i in range(0,51,5)},
-        step=1
-    ),
-    html.Div([
-        html.Label("Yield Rate (in annual %)"),
-        dcc.Input(id='yieldRate-input', value=15, type='number')
-    ]),
-    html.Div([
-        html.Label("Initial Contribution"),
-        dcc.Input(id='initialContribution-input', value=0, type='number')
-    ]),
-    html.Div([
-        html.Label("Monthly Contributions"),
-        dcc.Input(id='monthlyContributions-input', value=500, type='number')
-    ]),
-    html.Div([
-        html.Label("Yearly Productivity Gain (in %)"),
-        dcc.Input(id='yearlyGainOnContributions-input', value=3, type='number')
-    ]),
-    html.Div([
-        html.Label("Expected Inflation (in %)"),
-        dcc.Input(id='expectedInflation-input', value=3.5, type='number')
+    html.Div(style={
+        'marginBottom': '30px',
+        'border': '1px solid #ccc',
+        'padding': '20px',
+        'borderRadius': '5px'
+    }, children=[
+        html.Div([
+            html.Label("Investment Time (in years)"),
+            dcc.Slider(
+                id='investmentTime-slider',
+                min=1,
+                max=50,
+                value=20,
+                marks={i: '{}'.format(i) for i in range(0,51,5)},
+                step=1
+            )
+        ], style={'marginBottom': '20px'}),
+        
+        html.Div([
+            html.Label("Yield Rate (in annual %)"),
+            dcc.Input(id='yieldRate-input', value=15, type='number')
+        ], style={'marginBottom': '20px'}),
+        
+        html.Div([
+            html.Label("Initial Contribution"),
+            dcc.Input(id='initialContribution-input', value=0, type='number')
+        ], style={'marginBottom': '20px'}),
+        
+        html.Div([
+            html.Label("Monthly Contributions"),
+            dcc.Input(id='monthlyContributions-input', value=500, type='number')
+        ], style={'marginBottom': '20px'}),
+        
+        html.Div([
+            html.Label("Yearly Productivity Gain (in %)"),
+            dcc.Input(id='yearlyGainOnContributions-input', value=3, type='number')
+        ], style={'marginBottom': '20px'}),
+        
+        html.Div([
+            html.Label("Expected Inflation (in %)"),
+            dcc.Input(id='expectedInflation-input', value=3.5, type='number')
+        ], style={'marginBottom': '20px'}),
     ]),
     
     # Plot
-    dcc.Graph(id='compound-plot'),
-html.Div([
-    html.H3(id='final-balance-display', children='', style={'textAlign': 'center'}),
-    html.H3(id='comparison-display', children='', style={'textAlign': 'center'})
-], style={'textAlign': 'center'})
-
+    html.Div(style={
+        'marginBottom': '30px',
+        'padding': '20px'
+    }, children=[
+        dcc.Graph(id='compound-plot')
+    ]),
+    
+    html.Div([
+        html.H3(id='final-balance-display', children='', style={'textAlign': 'center'}),
+        html.H3(id='comparison-display', children='', style={'textAlign': 'center'})
+    ], style={'textAlign': 'center'})
 ])
 
 def compound_interest_over_time(initialContribution,
@@ -93,19 +125,19 @@ def compound_interest_over_time(initialContribution,
 
             # Increase the monthly contribution for the next month
             monthlyContributions *= (1 + monthly_contrib_growth)
-
-        months = np.arange(1, investmentTime + 1)    
-        yearsList = months // 12
-
-        return pd.DataFrame({
-            'Current Year': yearsList,
-            'Months': months,
+        
+        df = pd.DataFrame({            
             'Initial Balance': current_balance,
             'Interest': current_interest,
             'Inflation': current_inflation,
             'Monthly Investment': current_contribution,
             'Final Balance': final_balance
                             })
+        df = df.round(2)
+        
+        df['Months'] = np.arange(1, investmentTime + 1)
+        df['Current Year'] = df['Months'] // 12
+        return df
 
 # Callback function to update the plot
 @app.callback(
@@ -152,25 +184,25 @@ def update_plot(investmentTime, yieldRate, initialContribution, monthlyContribut
                        mode='lines', 
                        name='Your Investment',
                        text=df['Current Year'],
-                       hovertemplate='Month: %{x}<br>Final Balance: %{y}<br>Current Year: %{text}')
+                       hovertemplate='Month: %{x}<br>Final Balance: $%{y}<br>Current Year: %{text}')
     trace2 = go.Scatter(x=df_Treasury['Months'], 
                        y=df_Treasury['Final Balance'], 
                        mode='lines', 
                        name='Average Treasury 3-month yield (2%)',
                        text=df_Treasury['Current Year'],
-                       hovertemplate='Month: %{x}<br>Final Balance: %{y}<br>Current Year: %{text}')
+                       hovertemplate='Month: %{x}<br>Final Balance: $%{y}<br>Current Year: %{text}')
     trace3 = go.Scatter(x=df_stocks10['Months'], 
                        y=df_stocks10['Final Balance'], 
                        mode='lines', 
                        name='Average Stock market yield, last 10 years (12.39%)',
                        text=df_stocks10['Current Year'],
-                       hovertemplate='Month: %{x}<br>Final Balance: %{y}<br>Current Year: %{text}')
+                       hovertemplate='Month: %{x}<br>Final Balance: $%{y}<br>Current Year: %{text}')
     trace4 = go.Scatter(x=df_stocks20['Months'], 
                        y=df_stocks20['Final Balance'], 
                        mode='lines', 
                        name='Average Stock market yield, last 20 years (9.75%)',
                        text=df_stocks20['Current Year'],
-                       hovertemplate='Month: %{x}<br>Final Balance: %{y}<br>Current Year: %{text}')
+                       hovertemplate='Month: %{x}<br>Final Balance: $%{y}<br>Current Year: %{text}')
         
     layout = go.Layout(title="Compound Interest Over Time", xaxis=dict(title="Time in Months"), yaxis=dict(title="Amount"))
     
