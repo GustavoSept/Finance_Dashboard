@@ -44,27 +44,27 @@ app.layout = html.Div(style={
         ], style={'marginBottom': '20px'}),
         
         html.Div([
-            html.Label("Yield Rate (in annual %)"),
+            html.Label("Yield Rate (in annual %) "),
             dcc.Input(id='yieldRate-input', value=15, type='number')
         ], style={'marginBottom': '20px'}),
         
         html.Div([
-            html.Label("Initial Contribution"),
+            html.Label("Initial Contribution "),
             dcc.Input(id='initialContribution-input', value=0, type='number')
         ], style={'marginBottom': '20px'}),
         
         html.Div([
-            html.Label("Monthly Contributions"),
+            html.Label("Monthly Contributions "),
             dcc.Input(id='monthlyContributions-input', value=500, type='number')
         ], style={'marginBottom': '20px'}),
         
         html.Div([
-            html.Label("Yearly Productivity Gain (in %)"),
+            html.Label("Yearly Productivity Gain (in %) "),
             dcc.Input(id='yearlyGainOnContributions-input', value=3, type='number')
         ], style={'marginBottom': '20px'}),
         
         html.Div([
-            html.Label("Expected Inflation (in %)"),
+            html.Label("Expected Inflation (in %) "),
             dcc.Input(id='expectedInflation-input', value=3.5, type='number')
         ], style={'marginBottom': '20px'}),
     ]),
@@ -139,78 +139,20 @@ def compound_interest_over_time(initialContribution,
         df['Current Year'] = df['Months'] // 12
         return df
 
-# Callback function to update the plot
-@app.callback(
-    Output('compound-plot', 'figure'),
-    [
-        Input('investmentTime-slider', 'value'),
-        Input('yieldRate-input', 'value'),
-        Input('initialContribution-input', 'value'),
-        Input('monthlyContributions-input', 'value'),
-        Input('yearlyGainOnContributions-input', 'value'),
-        Input('expectedInflation-input', 'value')
-    ]
-)
-def update_plot(investmentTime, yieldRate, initialContribution, monthlyContributions, yearlyGainOnContributions, expectedInflation):
+def generate_scatter_trace(df, name, hover_name):
+    return go.Scatter(
+        x=df['Months'], 
+        y=df['Final Balance'], 
+        mode='lines', 
+        name=name,
+        text=df['Current Year'],
+        hovertemplate=f'Month: %{{x}}<br>{hover_name}: $%{{y:,.2f}}<br>Current Year: %{{text}}'
+    )
 
-    
-    df = compound_interest_over_time(initialContribution,
-                                     monthlyContributions,
-                                     yieldRate,
-                                     investmentTime,
-                                     yearlyGainOnContributions,
-                                     expectedInflation)
-    df_Treasury = compound_interest_over_time(initialContribution,
-                                     monthlyContributions,
-                                     yieldRate = 2,
-                                     investmentTime=investmentTime,
-                                     yearlyGainOnContributions=yearlyGainOnContributions,
-                                     expectedInflation=expectedInflation)
-    df_stocks10 = compound_interest_over_time(initialContribution,
-                                     monthlyContributions,
-                                     yieldRate = 12.39,
-                                     investmentTime=investmentTime,
-                                     yearlyGainOnContributions=yearlyGainOnContributions,
-                                     expectedInflation=expectedInflation)
-    df_stocks20 = compound_interest_over_time(initialContribution,
-                                     monthlyContributions,
-                                     yieldRate = 9.75,
-                                     investmentTime=investmentTime,
-                                     yearlyGainOnContributions=yearlyGainOnContributions,
-                                     expectedInflation=expectedInflation)
-    
-    trace = go.Scatter(x=df['Months'], 
-                       y=df['Final Balance'], 
-                       mode='lines', 
-                       name='Your Investment',
-                       text=df['Current Year'],
-                       hovertemplate='Month: %{x}<br>Final Balance: $%{y}<br>Current Year: %{text}')
-    trace2 = go.Scatter(x=df_Treasury['Months'], 
-                       y=df_Treasury['Final Balance'], 
-                       mode='lines', 
-                       name='Average Treasury 3-month yield (2%)',
-                       text=df_Treasury['Current Year'],
-                       hovertemplate='Month: %{x}<br>Final Balance: $%{y}<br>Current Year: %{text}')
-    trace3 = go.Scatter(x=df_stocks10['Months'], 
-                       y=df_stocks10['Final Balance'], 
-                       mode='lines', 
-                       name='Average Stock market yield, last 10 years (12.39%)',
-                       text=df_stocks10['Current Year'],
-                       hovertemplate='Month: %{x}<br>Final Balance: $%{y}<br>Current Year: %{text}')
-    trace4 = go.Scatter(x=df_stocks20['Months'], 
-                       y=df_stocks20['Final Balance'], 
-                       mode='lines', 
-                       name='Average Stock market yield, last 20 years (9.75%)',
-                       text=df_stocks20['Current Year'],
-                       hovertemplate='Month: %{x}<br>Final Balance: $%{y}<br>Current Year: %{text}')
-        
-    layout = go.Layout(title="Compound Interest Over Time", xaxis=dict(title="Time in Months"), yaxis=dict(title="Amount"))
-    
-    return {'data': [trace, trace2, trace3, trace4], 'layout': layout}
 
-# Callback function to update text summary
 @app.callback(
-    [Output('final-balance-display', 'children'),
+    [Output('compound-plot', 'figure'),
+     Output('final-balance-display', 'children'),
      Output('final-balance-display', 'style'),
      Output('comparison-display', 'children'),
      Output('comparison-display', 'style')],
@@ -223,29 +165,51 @@ def update_plot(investmentTime, yieldRate, initialContribution, monthlyContribut
         Input('expectedInflation-input', 'value')
     ]
 )
-def update_display_values(investmentTime, yieldRate, initialContribution, monthlyContributions, yearlyGainOnContributions, expectedInflation):
+def update_values(investmentTime, yieldRate, initialContribution, monthlyContributions, yearlyGainOnContributions, expectedInflation):
+    # Calculate dataframes
     df = compound_interest_over_time(initialContribution,
                                      monthlyContributions,
                                      yieldRate,
                                      investmentTime,
                                      yearlyGainOnContributions,
                                      expectedInflation)
+    df_Treasury = compound_interest_over_time(initialContribution,
+                                     monthlyContributions,
+                                     2,
+                                     investmentTime,
+                                     yearlyGainOnContributions,
+                                     expectedInflation)
     df_stocks10 = compound_interest_over_time(initialContribution,
-                                              monthlyContributions,
-                                              yieldRate=12.39,
-                                              investmentTime=investmentTime,
-                                              yearlyGainOnContributions=yearlyGainOnContributions,
-                                              expectedInflation=expectedInflation)
+                                     monthlyContributions,
+                                     12.39,
+                                     investmentTime,
+                                     yearlyGainOnContributions,
+                                     expectedInflation)
+    df_stocks20 = compound_interest_over_time(initialContribution,
+                                     monthlyContributions,
+                                     9.75,
+                                     investmentTime,
+                                     yearlyGainOnContributions,
+                                     expectedInflation)
     
+    # Create traces
+    traces = [
+        generate_scatter_trace(df, 'Your Investment', 'Final Balance'),
+        generate_scatter_trace(df_Treasury, 'Average Treasury 3-month yield (2%)', 'Final Balance'),
+        generate_scatter_trace(df_stocks10, 'Average Stock market yield, last 10 years (12.39%)', 'Final Balance'),
+        generate_scatter_trace(df_stocks20, 'Average Stock market yield, last 20 years (9.75%)', 'Final Balance')
+    ]
+    
+    layout = go.Layout(title="Compound Interest Over Time", xaxis=dict(title="Time in Months"), yaxis=dict(title="Amount"))
+    
+    # Display values
     final_balance = df['Final Balance'].iloc[-1]
     stock_balance = df_stocks10['Final Balance'].iloc[-1]
     difference = final_balance - stock_balance
 
-    # Define content and style for the final balance display
     final_balance_content = f"Your Final Balance: ${final_balance:,.2f}"
     final_balance_style = {'fontSize': '24px', 'fontWeight': 'bold'}
 
-    # Define content and style for the comparison display
     comparison_content = f"Difference compared to average stock market (last 10 years): ${difference:,.2f}"
     comparison_style = {
         'fontSize': '24px',
@@ -253,8 +217,7 @@ def update_display_values(investmentTime, yieldRate, initialContribution, monthl
         'color': 'green' if difference >= 0 else 'red'
     }
 
-    return final_balance_content, final_balance_style, comparison_content, comparison_style
-
+    return {'data': traces, 'layout': layout}, final_balance_content, final_balance_style, comparison_content, comparison_style
 
 if __name__ == '__main__':
     app.run_server(debug=True)
