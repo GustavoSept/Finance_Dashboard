@@ -61,6 +61,8 @@ dash_app.layout = dbc.Container([
             html.Br(),
             html.Button('Calculate Portfolio', id='calculate-button'),
             html.Button('Add Investment', id='apply-button', n_clicks=0), # Initializing n_clicks as well
+            html.Button('Clean Table', id='clean-table-button', n_clicks=0),
+
             
             # Hidden div to store the previous state
             # This makes the Null check dynamic, for every new row 
@@ -78,7 +80,8 @@ dash_app.layout = dbc.Container([
     Output('output-div', 'children'),
     Output('hidden-div', 'children'),
     [
-        Input('apply-button', 'n_clicks')
+        Input('apply-button', 'n_clicks'),
+        Input('clean-table-button', 'n_clicks')
     ],
     [
         dash.dependencies.State('investment-type', 'value'),
@@ -92,8 +95,19 @@ dash_app.layout = dbc.Container([
         dash.dependencies.State('hidden-div', 'children')
     ]
 )
-def add_investment(n, investment_type, ideal_proportion, risk_strategy, investment_amount, investment_time, expected_growth, random_growth, asset_volatility, prev_investments):
+def update_investments_table(apply_n, clean_n, investment_type, ideal_proportion, risk_strategy, investment_amount, investment_time, expected_growth, random_growth, asset_volatility, prev_investments):
     global investments
+
+    # Detecting which button was pressed
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        button_id = 'No clicks yet'
+    else:
+        button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+
+    if button_id == 'clean-table-button':
+        investments = []
+        return 'Table Cleaned', str(investments)
 
     # Check for None values
     inputs = [ideal_proportion, risk_strategy, investment_amount, expected_growth, asset_volatility]
@@ -109,7 +123,7 @@ def add_investment(n, investment_type, ideal_proportion, risk_strategy, investme
     elif investment_type.upper() in [item['Investment Type'] for item in investments]:
         return "Investment Type can't be duplicated", prev_investments
 
-    # Apply InvestmentTime to all rows
+    # Apply investment_time and investment_amount to all rows
     for investment in investments:
         investment['Investment Time (years)'] = investment_time
         investment['Investment Amount ($)'] = investment_amount    
@@ -144,6 +158,7 @@ def add_investment(n, investment_type, ideal_proportion, risk_strategy, investme
 )
 def update_asset_volatility(random_growth_value):
     return len(random_growth_value) == 0
+
 
 if __name__ == '__main__':
     investments = []  # Reset the investments list on server restart or page refresh
