@@ -4,7 +4,7 @@ from dash import dcc
 from dash import html
 from dash.dependencies import Input, Output
 from flask import Flask
-import dash_table
+from dash import dash_table
 from dash import no_update
 import pandas as pd
 
@@ -35,7 +35,7 @@ dash_app.layout = dbc.Container([
             html.Br(),
 
             html.Label('Investment Amount ($)'),
-            dcc.Input(id='investment-amount', type='number', placeholder='Enter Investment Amount'),
+            dcc.Input(id='investment-amount', type='number', placeholder='Enter Investment Amount',value=500), 
             html.Br(),
 
             html.Label('Investment Time (years)'),
@@ -44,7 +44,7 @@ dash_app.layout = dbc.Container([
             html.Br(),
 
             html.Label('Expected Growth (%)'),
-            dcc.Input(id='expected-growth', type='number', placeholder='Enter Expected Growth (%)'),
+            dcc.Input(id='expected-growth', type='number', placeholder='Enter Expected Growth (%)',value=6),
             html.Br(),
 
             dcc.Checklist(id='random-growth-check', options=[
