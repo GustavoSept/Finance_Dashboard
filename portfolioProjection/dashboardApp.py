@@ -106,7 +106,7 @@ def add_investment(n, investment_type, ideal_proportion, risk_strategy, investme
     # Special Null and duplicated checks for investment_type, since it's a text value.
     if not investment_type or not investment_type.strip():
         return "Investment Type cannot be empty!", prev_investments
-    elif investment_type in [item['Investment Type'] for item in investments]:
+    elif investment_type.upper() in [item['Investment Type'] for item in investments]:
         return "Investment Type can't be duplicated", prev_investments
 
     # Apply InvestmentTime to all rows
@@ -115,7 +115,7 @@ def add_investment(n, investment_type, ideal_proportion, risk_strategy, investme
         investment['Investment Amount ($)'] = investment_amount    
 
     investment = {
-        'Investment Type': investment_type,
+        'Investment Type': investment_type.upper(),
         'Ideal Proportion (%)': ideal_proportion,
         'Risk Strategy': risk_strategy,
         'Investment Amount ($)': investment_amount,
