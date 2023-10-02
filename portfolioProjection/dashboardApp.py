@@ -52,13 +52,16 @@ dash_app.layout = dbc.Container([
                 {'label': 'Enable Random Growth', 'value': 'True'}
             ], value=[]),
             html.Br(),
-
+    
             html.Label('Asset Volatility'),
             dcc.Dropdown(id='asset-volatility', options=[
                 {'label': 'Low', 'value': 'low'},
                 {'label': 'High', 'value': 'high'}
             ], disabled=True, value = 'high'),
-            
+            dcc.Checklist(id='growth-decay', options=[
+                {'label': 'Enable Growth Decay', 'value': 'False'}
+            ], value=[]),
+
             html.Br(),
             html.Button('Calculate Portfolio', id='calculate-button'),
             html.Button('Add Investment', id='apply-button', n_clicks=0), # Initializing n_clicks as well
@@ -93,10 +96,11 @@ dash_app.layout = dbc.Container([
         dash.dependencies.State('expected-growth', 'value'),
         dash.dependencies.State('random-growth-check', 'value'),
         dash.dependencies.State('asset-volatility', 'value'),
+        dash.dependencies.State('growth-decay', 'value'),
         dash.dependencies.State('hidden-div', 'children')
     ]
 )
-def update_investments_table(apply_n, clean_n, investment_type, ideal_proportion, risk_strategy, investment_amount, investment_time, expected_growth, random_growth, asset_volatility, prev_investments):
+def update_investments_table(apply_n, clean_n, investment_type, ideal_proportion, risk_strategy, investment_amount, investment_time, expected_growth, random_growth, asset_volatility, growth_decay, prev_investments):
     global investments
 
     # Detecting which button was pressed
@@ -137,7 +141,8 @@ def update_investments_table(apply_n, clean_n, investment_type, ideal_proportion
         'Investment Time (years)': investment_time,
         'Expected Growth (%)': expected_growth,
         'Random Growth': True if 'True' in random_growth else False,
-        'Asset Volatility': asset_volatility
+        'Asset Volatility': asset_volatility,
+        'Growth Decay': growth_decay
     }
     investments.append(investment)
 
@@ -154,8 +159,11 @@ def update_investments_table(apply_n, clean_n, investment_type, ideal_proportion
 
 # Callback for enabling/disabling the assetVolatility dropdown based on randomGrowth checkbox
 @dash_app.callback(
-    Output('asset-volatility', 'disabled'),
-    [Input('random-growth-check', 'value')]
+    [
+        Output('asset-volatility', 'disabled'),
+        Output('growth-decay', 'disabled')
+    ],
+    Input('random-growth-check', 'value')
 )
 def update_asset_volatility(random_growth_value):
     return len(random_growth_value) == 0
@@ -178,18 +186,16 @@ def calc_portfolio(n):
 
     # Calculating thresholdProportion
     df['Risk Strategy'] = df['Risk Strategy'].replace({
-                                                'Conservative': 7,
-                                                'Medium': 2,
-                                                'Risky': 1})
+                                                'Conservative': 1.0375,
+                                                'Medium': 1.075,
+                                                'Risky': 1.15})
     
-    # Simplified function to produce a 'slightly straight' sine curve.
-    # The higher the value in Risk Strategy, the closer to a 1:1 mapping it is.
-    # Zero being a 'pure' sine wave.
+    # Basically a linear function, with sine-wave at the higher end to smooth it.
     df['thresholdProportion'] = \
         np.minimum(
             (np.sin(df['Ideal Proportion (%)'] * 0.5 * np.pi)
-                + (df['Ideal Proportion (%)'] * df['Risk Strategy']))/ (df['Risk Strategy'] + 1),
-            df['Ideal Proportion (%)'] + 0.01
+                + (df['Ideal Proportion (%)'] * 0.7))/ (0.7 + 1),
+            df['Ideal Proportion (%)'] * df['Risk Strategy']
     )
 
     df['weeks'] = df['Investment Time (years)'] * 52
@@ -204,11 +210,30 @@ def calc_portfolio(n):
     df['Total Bought'] = np.zeros(df.shape[0])
     df['Investment Amount ($)'] = df['Investment Amount ($)'] * df['Ideal Proportion (%)']
 
+    # (if enabled) Pre-calculate Expected Growth decay
+    # Tends to the median growth (if growth > median)
+
+    median_growth = df['Expected Growth (%)'].median()
+
+    decay_2DList = np.array([
+        np.linspace(
+            start,
+            ((median_growth * 10 + start) / 11),
+            num=int(df['weeks'][0])
+        ) if start > median_growth else np.full(int(df['weeks'][0]), start)
+        for start in df['Expected Growth (%)']
+    ])
+
+
     def genPseudoRdNum(randomMean, randomStd, seed = 42):
         np.random.seed(seed)
         return np.random.normal(randomMean, randomStd)
 
     for week in range(df['weeks'][0]):
+        # Decaying Growth from pre-calculated table
+        mask = df['Growth Decay to Mean'] == True
+        df.loc[mask, 'Expected Growth (%)'] = decay_2DList[mask, week]
+
         # Compound interest conversion from annual to weekly growth
         df['weeklyGrowth'] = ((1 + df['Expected Growth (%)']) ** (1/52) - 1)\
                                  * genPseudoRdNum(1, df['Asset Volatility']/1.2, week)
@@ -217,7 +242,8 @@ def calc_portfolio(n):
         
         
         balance = df['Investment Amount ($)'].sum() # new balance
-        # ------------ Rebalancing Portfolio
+
+        # -------------------- Rebalancing Portfolio Section
         
         df['Threshold Investment Amount'] = df['thresholdProportion'] * balance
         df['Ideal Investment Amount'] = df['Ideal Proportion (%)'] * balance
