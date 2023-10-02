@@ -7,6 +7,7 @@ from flask import Flask
 from dash import dash_table
 from dash import no_update
 import pandas as pd
+import numpy as np
 
 # Global variable to store the investments
 investments = []
@@ -68,7 +69,7 @@ dash_app.layout = dbc.Container([
             # This makes the Null check dynamic, for every new row 
             html.Div(id='hidden-div', style={'display': 'none'}),
 
-            # Placeholder for results
+            # Placeholder for results (either table or portfolio calculation)
             html.Div(id='output-div')
         ], width={"size": 6, "offset": 3})),  # Adjusting width to 30% of screen and centering it
 ], fluid=True)
@@ -158,6 +159,100 @@ def update_investments_table(apply_n, clean_n, investment_type, ideal_proportion
 )
 def update_asset_volatility(random_growth_value):
     return len(random_growth_value) == 0
+
+
+# Callback for doing the actual calculation
+@dash_app.callback(
+    Output('output-div', 'children'),
+    Input('calculate-button', 'n_clicks')
+        
+)
+def calc_portfolio(n):
+    global investments
+
+    df = pd.DataFrame(investments)
+
+    # re-scaling idealProportion and expectedGrowth
+    df['Ideal Proportion (%)'] = df['Ideal Proportion (%)'] * (100 / df['Ideal Proportion (%)'].sum()) / 100
+    df['Expected Growth (%)'] = df['Expected Growth (%)'] / 100
+
+    # Calculating thresholdProportion
+    df['Risk Strategy'] = df['Risk Strategy'].replace({
+                                                'Conservative': 7,
+                                                'Medium': 2,
+                                                'Risky': 1})
+    
+    # Simplified function to produce a 'slightly straight' sine curve.
+    # The higher the value in Risk Strategy, the closer to a 1:1 mapping it is.
+    # Zero being a 'pure' sine wave.
+    df['thresholdProportion'] = \
+        np.minimum(
+            (np.sin(df['Ideal Proportion (%)'] * 0.5 * np.pi)
+                + (df['Ideal Proportion (%)'] * df['Risk Strategy']))/ (df['Risk Strategy'] + 1),
+            df['Ideal Proportion (%)'] + 0.01
+    )
+
+    df['weeks'] = df['Investment Time (years)'] * 52
+    df['Asset Volatility'] = df['Asset Volatility'].replace({'High':2.65, 'Mid': 0.95, 'Low':0.25})
+
+    # Disabling random number generation where necessary
+    df['Asset Volatility'] = df.apply(lambda row: 0 if row['Random Growth'] == 0 else row['Asset Volatility'], axis=1)
+    
+    # Initializing balances and setting actual investment amount for each investment
+    balance = df['Investment Amount ($)']
+    df['Total Sold'] = np.zeros(df.shape[0])
+    df['Total Bought'] = np.zeros(df.shape[0])
+    df['Investment Amount ($)'] = df['Investment Amount ($)'] * df['Ideal Proportion (%)']
+
+    def genPseudoRdNum(randomMean, randomStd, seed = 42):
+        np.random.seed(seed)
+        return np.random.normal(randomMean, randomStd)
+
+    for week in range(df['weeks'][0]):
+        # Compound interest conversion from annual to weekly growth
+        df['weeklyGrowth'] = ((1 + df['Expected Growth (%)']) ** (1/52) - 1)\
+                                 * genPseudoRdNum(1, df['Asset Volatility']/1.2, week)
+        # Calculating growth
+        df['Investment Amount ($)'] += df['Investment Amount ($)'] * df['weeklyGrowth']
+        
+        
+        balance = df['Investment Amount ($)'].sum() # new balance
+        # ------------ Rebalancing Portfolio
+        
+        df['Threshold Investment Amount'] = df['thresholdProportion'] * balance
+        df['Ideal Investment Amount'] = df['Ideal Proportion (%)'] * balance
+
+        # Calculate the Selling Delta based on threshold trigger
+        df['Selling Delta'] = np.where(df['Investment Amount ($)'] > df['Threshold Investment Amount'],
+                                    df['Investment Amount ($)'] - df['Threshold Investment Amount'],
+                                    0)
+        df['Total Sold'] += df['Selling Delta']
+
+        #display('Before',df) # --------------------------------- DISPLAY
+
+        # Update the 'Investment Amount ($)' column based on threshold trigger
+        df.loc[df['Investment Amount ($)'] > df['Threshold Investment Amount'],
+               'Investment Amount ($)'] = df['Threshold Investment Amount']
+        soldAmount = df['Selling Delta'].sum()
+
+        oldValues_Series = df['Investment Amount ($)'] # Later, we'll calculate how much we bought
+
+        # Calculate toBuy delta (how much each investment needs to be bought in theory)
+        df['toBuy Delta'] = np.where(df['Investment Amount ($)'] < df['Ideal Investment Amount'],
+                                    df['Ideal Investment Amount'] - df['Investment Amount ($)'],
+                                    0)
+        # Actually 'buying' assets, with the money left in 'soldAmount'
+        df['Investment Amount ($)'] = np.where(df['Investment Amount ($)'] < df['Ideal Investment Amount'],
+                                            ((df['toBuy Delta'] * (100 / df['toBuy Delta'].sum()) / 100)
+                                                * soldAmount) + df['Investment Amount ($)'],
+                                            df['Investment Amount ($)']
+                                        )
+        df['Total Bought'] = df['Total Bought'] + (df['Investment Amount ($)'] - oldValues_Series)
+        df['Actual Proportion (%)'] = df['Investment Amount ($)'] / df['Investment Amount ($)'].sum()
+    
+
+    return 'function not completed yet'
+
 
 
 if __name__ == '__main__':
