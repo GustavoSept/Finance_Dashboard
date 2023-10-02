@@ -9,6 +9,9 @@ from dash import no_update
 import pandas as pd
 import numpy as np
 
+import plotly.graph_objects as go
+import plotly.express as px
+
 # Global variable to store the investments
 investments = []
 
@@ -56,10 +59,12 @@ dash_app.layout = dbc.Container([
             html.Label('Asset Volatility'),
             dcc.Dropdown(id='asset-volatility', options=[
                 {'label': 'Low', 'value': 'low'},
+                {'label': 'Mid', 'value': 'mid'},
                 {'label': 'High', 'value': 'high'}
             ], disabled=True, value = 'high'),
+
             dcc.Checklist(id='growth-decay', options=[
-                {'label': 'Enable Growth Decay', 'value': 'False'}
+                {'label': 'Enable Growth Decay', 'value': 'True'}
             ], value=[]),
 
             html.Br(),
@@ -73,7 +78,8 @@ dash_app.layout = dbc.Container([
             html.Div(id='hidden-div', style={'display': 'none'}),
 
             # Placeholder for results (either table or portfolio calculation)
-            html.Div(id='output-div')
+            html.Div(id='table-div'),
+            html.Div(id='charts-div')
         ], width={"size": 6, "offset": 3})),  # Adjusting width to 30% of screen and centering it
 ], fluid=True)
 
@@ -81,7 +87,7 @@ dash_app.layout = dbc.Container([
 
 # Storing values from the user, displaying table
 @dash_app.callback(
-    Output('output-div', 'children'),
+    Output('table-div', 'children'),
     Output('hidden-div', 'children'),
     [
         Input('apply-button', 'n_clicks'),
@@ -142,7 +148,8 @@ def update_investments_table(apply_n, clean_n, investment_type, ideal_proportion
         'Expected Growth (%)': expected_growth,
         'Random Growth': True if 'True' in random_growth else False,
         'Asset Volatility': asset_volatility,
-        'Growth Decay': growth_decay
+        'Growth Decay': True if 'True' in growth_decay else False
+
     }
     investments.append(investment)
 
@@ -157,38 +164,21 @@ def update_investments_table(apply_n, clean_n, investment_type, ideal_proportion
 
 # ---------
 
-# Callback for enabling/disabling the assetVolatility dropdown based on randomGrowth checkbox
-@dash_app.callback(
-    [
-        Output('asset-volatility', 'disabled'),
-        Output('growth-decay', 'disabled')
-    ],
-    Input('random-growth-check', 'value')
-)
-def update_asset_volatility(random_growth_value):
-    return len(random_growth_value) == 0
-
-
-# Callback for doing the actual calculation
-@dash_app.callback(
-    Output('output-div', 'children'),
-    Input('calculate-button', 'n_clicks')
-        
-)
-def calc_portfolio(n):
-    global investments
-
-    df = pd.DataFrame(investments)
+def calc_portfolio(df):
+    if investments:
+        df = pd.DataFrame(investments)
+    else:
+        return 'There seems to be no investments made yet'
 
     # re-scaling idealProportion and expectedGrowth
     df['Ideal Proportion (%)'] = df['Ideal Proportion (%)'] * (100 / df['Ideal Proportion (%)'].sum()) / 100
     df['Expected Growth (%)'] = df['Expected Growth (%)'] / 100
 
-    # Calculating thresholdProportion
+    # Re-labeling risks
     df['Risk Strategy'] = df['Risk Strategy'].replace({
-                                                'Conservative': 1.0375,
-                                                'Medium': 1.075,
-                                                'Risky': 1.15})
+                                                'conservative': 1.0375,
+                                                'medium': 1.075,
+                                                'risky': 1.15})
     
     # Basically a linear function, with sine-wave at the higher end to smooth it.
     df['thresholdProportion'] = \
@@ -199,20 +189,25 @@ def calc_portfolio(n):
     )
 
     df['weeks'] = df['Investment Time (years)'] * 52
-    df['Asset Volatility'] = df['Asset Volatility'].replace({'High':2.65, 'Mid': 0.95, 'Low':0.25})
+    df['Asset Volatility'] = df['Asset Volatility'].replace({'high':15.25, 'mid': 3.5, 'low':1})
 
     # Disabling random number generation where necessary
     df['Asset Volatility'] = df.apply(lambda row: 0 if row['Random Growth'] == 0 else row['Asset Volatility'], axis=1)
     
     # Initializing balances and setting actual investment amount for each investment
-    balance = df['Investment Amount ($)']
     df['Total Sold'] = np.zeros(df.shape[0])
     df['Total Bought'] = np.zeros(df.shape[0])
     df['Investment Amount ($)'] = df['Investment Amount ($)'] * df['Ideal Proportion (%)']
+    investType = list(df['Investment Type'])
+    currentAmount = list(df['Investment Amount ($)'])
+    currentWeek = list(np.zeros(df.shape[0]))
+    totalSold = list(np.zeros(df.shape[0]))
+    totalBought = list(np.zeros(df.shape[0]))
+    actualProportion = list(np.zeros(df.shape[0]))
+
 
     # (if enabled) Pre-calculate Expected Growth decay
     # Tends to the median growth (if growth > median)
-
     median_growth = df['Expected Growth (%)'].median()
 
     decay_2DList = np.array([
@@ -224,22 +219,40 @@ def calc_portfolio(n):
         for start in df['Expected Growth (%)']
     ])
 
+    def genPseudoRdNum2(randomMean, randomStd, week):
+        np.random.seed(week)
+        volatilityCycle = np.abs(np.sin(week * 0.035 * np.pi) * 2) + 0.0001 # "Bull-Bear Market" every 2 years or so
+        return np.random.normal(randomMean, randomStd * volatilityCycle)
 
-    def genPseudoRdNum(randomMean, randomStd, seed = 42):
-        np.random.seed(seed)
-        return np.random.normal(randomMean, randomStd)
 
-    for week in range(df['weeks'][0]):
+    def genPseudoRdNum(randomMean, randomStd, week):
+        np.random.seed(week)
+
+        # About 2 Volatility cycles every year
+        volatilityMagnitude = 0.5
+        volatilityCycle \
+            = (np.abs               
+                (np.sin(week * 0.035 * np.pi) * volatilityMagnitude)             
+            ) + 0.00001
+        
+        # Mini Bull-Bear cycles every 3 years
+        trendMagnitude = 0.5
+        trendCycle \
+            = (np.sin(week * 0.006 * np.pi) * trendMagnitude) + 0.00001
+
+        return np.random.normal(randomMean * (1+trendCycle), randomStd * volatilityCycle)
+
+
+    for week in range(1, df['weeks'][0] + 1):
         # Decaying Growth from pre-calculated table
-        mask = df['Growth Decay to Mean'] == True
-        df.loc[mask, 'Expected Growth (%)'] = decay_2DList[mask, week]
+        mask = df['Growth Decay'] == True
+        df.loc[mask, 'Expected Growth (%)'] = decay_2DList[mask, week-1]
 
         # Compound interest conversion from annual to weekly growth
         df['weeklyGrowth'] = ((1 + df['Expected Growth (%)']) ** (1/52) - 1)\
-                                 * genPseudoRdNum(1, df['Asset Volatility']/1.2, week)
+                                 * genPseudoRdNum(1, df['Asset Volatility'], week)
         # Calculating growth
         df['Investment Amount ($)'] += df['Investment Amount ($)'] * df['weeklyGrowth']
-        
         
         balance = df['Investment Amount ($)'].sum() # new balance
 
@@ -275,9 +288,96 @@ def calc_portfolio(n):
                                         )
         df['Total Bought'] = df['Total Bought'] + (df['Investment Amount ($)'] - oldValues_Series)
         df['Actual Proportion (%)'] = df['Investment Amount ($)'] / df['Investment Amount ($)'].sum()
-    
 
-    return 'function not completed yet'
+        # --------------------------- Storing Info in TimeLine
+        investType.extend(df['Investment Type'].tolist())
+        currentAmount.extend(df['Investment Amount ($)'].tolist())
+        currentWeek.extend([week] * df.shape[0])
+        totalSold.extend(df['Total Sold'].tolist())
+        totalBought.extend(df['Total Bought'].tolist())
+        actualProportion.extend(df['Actual Proportion (%)'].tolist()) 
+        
+        
+    # Creating the actual dataFrame for timeline
+    timeline_df = pd.DataFrame({
+        'Investment Type': investType,
+        'Current Amount ($)': currentAmount,
+        'Week': currentWeek,
+        'Total Sold': totalSold,
+        'Total Bought': totalBought,
+        'Actual Proportion (%)': actualProportion
+    })
+  
+
+    return timeline_df
+
+# Callback for enabling/disabling the assetVolatility dropdown based on randomGrowth checkbox
+@dash_app.callback(
+    [
+        Output('asset-volatility', 'disabled'),
+        Output('growth-decay', 'value'),
+        Output('growth-decay', 'style')
+    ],
+    Input('random-growth-check', 'value')
+)
+def update_asset_volatility(random_growth_value):
+    is_disabled = len(random_growth_value) == 0
+    if is_disabled:
+        # Return the default style for disabled look and set the value to False
+        return is_disabled, [False], {'opacity': 0.5}
+    else:
+        # Return the normal style and set the value to True
+        return is_disabled, [True], {'opacity': 1}
+
+
+
+
+
+# Callback for plotting the calculation
+@dash_app.callback(
+    Output('charts-div', 'children'),
+    Input('calculate-button', 'n_clicks')        
+)
+def calc_and_display_portfolio(n):
+    global investments
+
+    df = pd.DataFrame(investments)
+    timeline_df = calc_portfolio(df)
+
+    # Create the Pie Chart
+    grouped_df = timeline_df.groupby('Investment Type').sum()['Actual Proportion (%)'].reset_index()
+    pie_chart = dcc.Graph(
+        figure=px.pie(
+            grouped_df,
+            names='Investment Type',
+            values='Actual Proportion (%)',
+            title="Investment Type Distribution"
+            )
+    )
+
+    # Create the Line Chart for each Investment Type
+    line_chart_by_type = dcc.Graph(
+        figure=px.line(
+            timeline_df,
+            x='Week',
+            y='Current Amount ($)',
+            color='Investment Type',
+            title="Current Amount ($) through Time by Investment Type"
+            )
+    )
+
+    # Create the Line Chart for the Total Amount
+    priceHistory = timeline_df.groupby('Week', as_index=False)['Current Amount ($)'].sum()
+    line_chart_total = dcc.Graph(
+        figure=px.line(
+            priceHistory,
+            x='Week',
+            y='Current Amount ($)',
+            title="Total Amount ($) through Time"
+            )
+    )
+
+    return [pie_chart, line_chart_by_type, line_chart_total]
 
 
 
