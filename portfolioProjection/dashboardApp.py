@@ -16,8 +16,8 @@ import plotly.express as px
 investments = []
 portfolioSettings = {
     'Start Investment Amount': 1000,
-    'Monthly Investment': 150,
-    'Investment Time (years)': 25
+    'Monthly Investment': 100,
+    'Investment Time (years)': 2
 }
 
 
@@ -80,11 +80,11 @@ dash_app.layout = dbc.Container([
 
             html.Br(),
             html.Label('Monthly Investment'),
-            dcc.Input(id='investment-monthly-amount', type='number', placeholder='Enter Investment Amount',value=150), 
+            dcc.Input(id='investment-monthly-amount', type='number', placeholder='Enter Investment Amount',value=100), 
             html.Br(),
 
             html.Label('Investment Time (years)'),
-            dcc.Slider(id='investment-time-slider', min=0, max=40, step=1, value=5, 
+            dcc.Slider(id='investment-time-slider', min=0, max=40, step=1, value=2, 
                        marks={i: str(i) for i in range(0, 41, 5)}),
 
             html.Br(),
@@ -92,10 +92,18 @@ dash_app.layout = dbc.Container([
             html.Button('Add Investment', id='apply-button', n_clicks=0), # Initializing n_clicks as well
             html.Button('Clean Table', id='clean-table-button', n_clicks=0),
 
-            
+            # Dedicated div for error messages
+            html.Div(id='error-message-div', style={'color': 'red'}),
+
             # Hidden div to store the previous state
             # This makes the Null check dynamic, for every new row 
             html.Div(id='hidden-div', style={'display': 'none'}),
+
+            # Hidden div to decide whether to hide the table-div
+            html.Div(id='hide-table-flag', style={'display': 'none'}),
+
+            
+
 
             # Placeholder for results (either table or portfolio calculation)
             html.Div(id='table-div'),
@@ -107,11 +115,17 @@ dash_app.layout = dbc.Container([
 
 # Storing values from the user, displaying table
 @dash_app.callback(
-    Output('table-div', 'children'),
-    Output('hidden-div', 'children'),
+    [
+        Output('table-div', 'children'),
+        Output('hidden-div', 'children'),
+        Output('hide-table-flag', 'children'),
+        Output('error-message-div', 'children')
+    ]
+    ,
     [
         Input('apply-button', 'n_clicks'),
-        Input('clean-table-button', 'n_clicks')
+        Input('clean-table-button', 'n_clicks'),
+        Input('calculate-button', 'n_clicks')
     ],
     [
         dash.dependencies.State('investment-type', 'value'),
@@ -128,7 +142,7 @@ dash_app.layout = dbc.Container([
     ]
 )
 def update_investments_table(
-    apply_n,clean_n,investment_type,
+    apply_n,clean_n,calc_n,investment_type,
     ideal_proportion,risk_strategy,investment_start_amount, investment_monthly_amount,
     investment_time,expected_growth,random_growth,
     asset_volatility,growth_decay,prev_investments):
@@ -145,7 +159,14 @@ def update_investments_table(
 
     if button_id == 'clean-table-button':
         investments = []
-        return 'Table Cleaned', str(investments)
+        return no_update, str(investments), 'hide', 'Table Cleaned'
+
+    elif button_id == 'calculate-button':  # Check if calculate button was clicked
+        # Check for investments data, if empty, return appropriate message
+        if not investments:
+            return no_update, no_update, 'show', 'Please add investments before calculating.'
+        else:
+            return no_update, no_update, 'hide', no_update  # Hide the table
 
     # Check for None values
     inputs = [ideal_proportion, risk_strategy, investment_start_amount, investment_monthly_amount, expected_growth, asset_volatility]
@@ -153,13 +174,14 @@ def update_investments_table(
         # If we have previous investments stored, revert to them
         if prev_investments:
             investments = eval(prev_investments)
-        return "Please fill out all fields before adding an investment!", prev_investments
+        return no_update, prev_investments, 'show', "Please fill out all fields before adding an investment!"
+
     
     # Special Null and duplicated checks for investment_type, since it's a text value.
     if not investment_type or not investment_type.strip():
-        return "Investment Type cannot be empty!", prev_investments
+        return no_update, prev_investments, 'show', "Investment Type cannot be empty!"
     elif investment_type.upper() in [item['Investment Type'] for item in investments]:
-        return "Investment Type can't be duplicated", prev_investments
+        return no_update, prev_investments, 'show', "Investment Type can't be duplicated"
 
     # Store investment values pertaining to the whole portfolio
     portfolioSettings['Investment Time (years)'] = min(investment_time, 40) # Just in case the front-end sends a huge value, cap at 40 years
@@ -183,12 +205,16 @@ def update_investments_table(
     # Convert investments list to DataFrame for display
     df = pd.DataFrame(investments)
 
+    # Returns 3 things:
+    # The table itself
+    # Stores investments in the hidden-div, for rollback reasons
+    # 'show', to show the table again if it's hidden 
     return dash_table.DataTable(
         id='investment-table',
         columns=[{'name': i, 'id': i} for i in df.columns],
         data=df.to_dict('records')
-    ), str(investments)  # Storing the investments in the hidden-div, for rollback reasons
-
+    ), str(investments), 'show', no_update
+    
 # ------------
 
 def calc_portfolio(df, portfolioSettings):
@@ -408,6 +434,19 @@ def calc_and_display_portfolio(n, investment_start_amount, investment_monthly_am
     )
 
     return [pie_chart, line_chart_by_type, line_chart_total]
+
+@dash_app.callback(
+    Output('table-div', 'style'),
+    Input('hide-table-flag', 'children')
+)
+def toggle_table_display(flag):
+    if flag == 'hide':
+        return {'display': 'none'}  # Hide the table
+    elif flag == 'show':
+        return {}  # Show the table
+    else:
+        return {}  # Default state (show the table)
+
 
 
 
