@@ -14,6 +14,12 @@ import plotly.express as px
 
 # Global variable to store the investments
 investments = []
+portfolioSettings = {
+    'Start Investment Amount': 1000,
+    'Monthly Investment': 150,
+    'Investment Time (years)': 25
+}
+
 
 app = Flask(__name__)
 dash_app = dash.Dash(__name__, server=app, external_stylesheets=[dbc.themes.BOOTSTRAP], routes_pathname_prefix='/dash/')
@@ -22,6 +28,10 @@ dash_app.layout = dbc.Container([
     dbc.Row(
         dbc.Col([
             # Your Dash components for user input go here
+            html.Label('-- per-investment settings --'),
+            html.Br(),
+            html.Br(),
+
             html.Label('Investment Type'),
             dcc.Input(id='investment-type', type='text', placeholder='Enter Investment Type'),
             html.Br(),
@@ -36,15 +46,6 @@ dash_app.layout = dbc.Container([
                 {'label': 'Medium', 'value': 'medium'},
                 {'label': 'Risky', 'value': 'risky'}
             ], value='risky'),
-            html.Br(),
-
-            html.Label('Investment Amount ($)'),
-            dcc.Input(id='investment-amount', type='number', placeholder='Enter Investment Amount',value=500), 
-            html.Br(),
-
-            html.Label('Investment Time (years)'),
-            dcc.Slider(id='investment-time-slider', min=0, max=50, step=1, value=25, 
-                       marks={i: str(i) for i in range(0, 51, 5)}),
             html.Br(),
 
             html.Label('Expected Growth (%)'),
@@ -66,6 +67,24 @@ dash_app.layout = dbc.Container([
             dcc.Checklist(id='growth-decay', options=[
                 {'label': 'Enable Growth Decay', 'value': 'True'}
             ], value=[]),
+
+            html.Br(),
+            html.Br(),            
+            html.Label('-- portfolio settings --'),
+
+            html.Br(),
+            html.Label('Investment Starting Point'),
+            dcc.Input(id='investment-start-amount', type='number', placeholder='Enter Investment Amount',value=1000),             
+
+            html.Br(),
+            html.Label('Monthly Investment'),
+            dcc.Input(id='investment-monthly-amount', type='number', placeholder='Enter Investment Amount',value=150), 
+            html.Br(),
+
+            html.Label('Investment Time (years)'),
+            dcc.Slider(id='investment-time-slider', min=0, max=50, step=1, value=25, 
+                       marks={i: str(i) for i in range(0, 51, 5)}),
+
 
             html.Br(),
             html.Button('Calculate Portfolio', id='calculate-button'),
@@ -97,7 +116,8 @@ dash_app.layout = dbc.Container([
         dash.dependencies.State('investment-type', 'value'),
         dash.dependencies.State('ideal-proportion-slider', 'value'),
         dash.dependencies.State('risk-strategy', 'value'),
-        dash.dependencies.State('investment-amount', 'value'),
+        dash.dependencies.State('investment-start-amount', 'value'),
+        dash.dependencies.State('investment-monthly-amount', 'value'),
         dash.dependencies.State('investment-time-slider', 'value'),
         dash.dependencies.State('expected-growth', 'value'),
         dash.dependencies.State('random-growth-check', 'value'),
@@ -106,8 +126,14 @@ dash_app.layout = dbc.Container([
         dash.dependencies.State('hidden-div', 'children')
     ]
 )
-def update_investments_table(apply_n, clean_n, investment_type, ideal_proportion, risk_strategy, investment_amount, investment_time, expected_growth, random_growth, asset_volatility, growth_decay, prev_investments):
+def update_investments_table(
+    apply_n,clean_n,investment_type,
+    ideal_proportion,risk_strategy,investment_start_amount, investment_monthly_amount,
+    investment_time,expected_growth,random_growth,
+    asset_volatility,growth_decay,prev_investments):
+
     global investments
+    global portfolioSettings
 
     # Detecting which button was pressed
     ctx = dash.callback_context
@@ -121,7 +147,7 @@ def update_investments_table(apply_n, clean_n, investment_type, ideal_proportion
         return 'Table Cleaned', str(investments)
 
     # Check for None values
-    inputs = [ideal_proportion, risk_strategy, investment_amount, expected_growth, asset_volatility]
+    inputs = [ideal_proportion, risk_strategy, investment_start_amount, investment_monthly_amount, expected_growth, asset_volatility]
     if any(val is None for val in inputs):
         # If we have previous investments stored, revert to them
         if prev_investments:
@@ -134,23 +160,23 @@ def update_investments_table(apply_n, clean_n, investment_type, ideal_proportion
     elif investment_type.upper() in [item['Investment Type'] for item in investments]:
         return "Investment Type can't be duplicated", prev_investments
 
-    # Apply investment_time and investment_amount to all rows
-    for investment in investments:
-        investment['Investment Time (years)'] = investment_time
-        investment['Investment Amount ($)'] = investment_amount    
+    # Store investment values pertaining to the whole portfolio
+    portfolioSettings['Investment Time (years)'] = investment_time
+    portfolioSettings['Start Investment Amount'] = investment_start_amount 
+    portfolioSettings['Monthly Investment'] = investment_monthly_amount
+
 
     investment = {
         'Investment Type': investment_type.upper(),
         'Ideal Proportion (%)': ideal_proportion,
-        'Risk Strategy': risk_strategy,
-        'Investment Amount ($)': investment_amount,
-        'Investment Time (years)': investment_time,
+        'Risk Strategy': risk_strategy,        
         'Expected Growth (%)': expected_growth,
         'Random Growth': True if 'True' in random_growth else False,
         'Asset Volatility': asset_volatility,
         'Growth Decay': True if 'True' in growth_decay else False
 
     }
+
     investments.append(investment)
 
     # Convert investments list to DataFrame for display
@@ -162,14 +188,25 @@ def update_investments_table(apply_n, clean_n, investment_type, ideal_proportion
         data=df.to_dict('records')
     ), str(investments)  # Storing the investments in the hidden-div, for rollback reasons
 
-# ---------
+# ------------
 
 def calc_portfolio(df):
-    if investments:
+
+    global portfolioSettings
+    global investments
+
+    if len(investments) > 0:
         df = pd.DataFrame(investments)
     else:
-        return 'There seems to be no investments made yet'
+        return 'Investments seems to be empty'
+    
+    if portfolioSettings:
+        startInvestment = portfolioSettings.get('Start Investment Amount', 0)
+        monthlyInvestment = portfolioSettings.get('Monthly Investment', 0)
+        investmentTime = portfolioSettings.get('Investment Time (years)', 0)
 
+
+    distinctInvestments_amount = df.shape[0]
     # re-scaling idealProportion and expectedGrowth
     df['Ideal Proportion (%)'] = df['Ideal Proportion (%)'] * (100 / df['Ideal Proportion (%)'].sum()) / 100
     df['Expected Growth (%)'] = df['Expected Growth (%)'] / 100
@@ -181,29 +218,29 @@ def calc_portfolio(df):
                                                 'risky': 1.15})
     
     # Basically a linear function, with sine-wave at the higher end to smooth it.
-    df['thresholdProportion'] = \
+    df['Treshold Proportion'] = \
         np.minimum(
             (np.sin(df['Ideal Proportion (%)'] * 0.5 * np.pi)
                 + (df['Ideal Proportion (%)'] * 0.7))/ (0.7 + 1),
             df['Ideal Proportion (%)'] * df['Risk Strategy']
     )
 
-    df['weeks'] = df['Investment Time (years)'] * 52
+    investmentTime_inWeeks = investmentTime * 52
     df['Asset Volatility'] = df['Asset Volatility'].replace({'high':15.25, 'mid': 3.5, 'low':1})
 
     # Disabling random number generation where necessary
     df['Asset Volatility'] = df.apply(lambda row: 0 if row['Random Growth'] == 0 else row['Asset Volatility'], axis=1)
     
     # Initializing balances and setting actual investment amount for each investment
-    df['Total Sold'] = np.zeros(df.shape[0])
-    df['Total Bought'] = np.zeros(df.shape[0])
-    df['Investment Amount ($)'] = df['Investment Amount ($)'] * df['Ideal Proportion (%)']
+    df['Total Sold'] = np.zeros(distinctInvestments_amount)
+    df['Total Bought'] = np.zeros(distinctInvestments_amount)
+    df['Current Amount'] = startInvestment * df['Ideal Proportion (%)']
     investType = list(df['Investment Type'])
-    currentAmount = list(df['Investment Amount ($)'])
-    currentWeek = list(np.zeros(df.shape[0]))
-    totalSold = list(np.zeros(df.shape[0]))
-    totalBought = list(np.zeros(df.shape[0]))
-    actualProportion = list(np.zeros(df.shape[0]))
+    currentAmount = list(df['Current Amount'])
+    currentWeek = list(np.zeros(distinctInvestments_amount))
+    totalSold = list(np.zeros(distinctInvestments_amount))
+    totalBought = list(np.zeros(distinctInvestments_amount))
+    actualProportion = list(np.zeros(distinctInvestments_amount))
 
 
     # (if enabled) Pre-calculate Expected Growth decay
@@ -214,16 +251,10 @@ def calc_portfolio(df):
         np.linspace(
             start,
             ((median_growth * 10 + start) / 11),
-            num=int(df['weeks'][0])
-        ) if start > median_growth else np.full(int(df['weeks'][0]), start)
+            num=investmentTime_inWeeks
+        ) if start > median_growth else np.full(investmentTime_inWeeks, start)
         for start in df['Expected Growth (%)']
     ])
-
-    def genPseudoRdNum2(randomMean, randomStd, week):
-        np.random.seed(week)
-        volatilityCycle = np.abs(np.sin(week * 0.035 * np.pi) * 2) + 0.0001 # "Bull-Bear Market" every 2 years or so
-        return np.random.normal(randomMean, randomStd * volatilityCycle)
-
 
     def genPseudoRdNum(randomMean, randomStd, week):
         np.random.seed(week)
@@ -243,7 +274,7 @@ def calc_portfolio(df):
         return np.random.normal(randomMean * (1+trendCycle), randomStd * volatilityCycle)
 
 
-    for week in range(1, df['weeks'][0] + 1):
+    for week in range(1, investmentTime_inWeeks + 1):
         # Decaying Growth from pre-calculated table
         mask = df['Growth Decay'] == True
         df.loc[mask, 'Expected Growth (%)'] = decay_2DList[mask, week-1]
@@ -251,48 +282,48 @@ def calc_portfolio(df):
         # Compound interest conversion from annual to weekly growth
         df['weeklyGrowth'] = ((1 + df['Expected Growth (%)']) ** (1/52) - 1)\
                                  * genPseudoRdNum(1, df['Asset Volatility'], week)
-        # Calculating growth
-        df['Investment Amount ($)'] += df['Investment Amount ($)'] * df['weeklyGrowth']
+        # Casting compound growth
+        df['Current Amount'] += df['Current Amount'] * df['weeklyGrowth']        
         
-        balance = df['Investment Amount ($)'].sum() # new balance
+        balance = df['Current Amount'].sum() # new balance
 
         # -------------------- Rebalancing Portfolio Section
         
-        df['Threshold Investment Amount'] = df['thresholdProportion'] * balance
+        df['Threshold Investment Amount'] = df['Treshold Proportion'] * balance
         df['Ideal Investment Amount'] = df['Ideal Proportion (%)'] * balance
 
         # Calculate the Selling Delta based on threshold trigger
-        df['Selling Delta'] = np.where(df['Investment Amount ($)'] > df['Threshold Investment Amount'],
-                                    df['Investment Amount ($)'] - df['Threshold Investment Amount'],
+        df['Selling Delta'] = np.where(df['Current Amount'] > df['Threshold Investment Amount'],
+                                    df['Current Amount'] - df['Threshold Investment Amount'],
                                     0)
         df['Total Sold'] += df['Selling Delta']
 
-        #display('Before',df) # --------------------------------- DISPLAY
-
-        # Update the 'Investment Amount ($)' column based on threshold trigger
-        df.loc[df['Investment Amount ($)'] > df['Threshold Investment Amount'],
-               'Investment Amount ($)'] = df['Threshold Investment Amount']
+        # Update the 'Current Amount' column based on threshold trigger
+        df.loc[df['Current Amount'] > df['Threshold Investment Amount'],
+               'Current Amount'] = df['Threshold Investment Amount']
         soldAmount = df['Selling Delta'].sum()
 
-        oldValues_Series = df['Investment Amount ($)'] # Later, we'll calculate how much we bought
+        oldValues_Series = df['Current Amount'] # Later, we'll calculate how much we bought
 
         # Calculate toBuy delta (how much each investment needs to be bought in theory)
-        df['toBuy Delta'] = np.where(df['Investment Amount ($)'] < df['Ideal Investment Amount'],
-                                    df['Ideal Investment Amount'] - df['Investment Amount ($)'],
+        df['toBuy Delta'] = np.where(df['Current Amount'] < df['Ideal Investment Amount'],
+                                    df['Ideal Investment Amount'] - df['Current Amount'],
                                     0)
-        # Actually 'buying' assets, with the money left in 'soldAmount'
-        df['Investment Amount ($)'] = np.where(df['Investment Amount ($)'] < df['Ideal Investment Amount'],
+        # Actually 'buying' assets, with the money left in 'soldAmount' + Monthly Contributions
+        df['Current Amount'] = np.where(df['Current Amount'] < df['Ideal Investment Amount'],
                                             ((df['toBuy Delta'] * (100 / df['toBuy Delta'].sum()) / 100)
-                                                * soldAmount) + df['Investment Amount ($)'],
-                                            df['Investment Amount ($)']
+                                                * int(soldAmount + monthlyInvestment)) + df['Current Amount'],
+                                            df['Current Amount']
                                         )
-        df['Total Bought'] = df['Total Bought'] + (df['Investment Amount ($)'] - oldValues_Series)
-        df['Actual Proportion (%)'] = df['Investment Amount ($)'] / df['Investment Amount ($)'].sum()
+
+
+        df['Total Bought'] = df['Total Bought'] + (df['Current Amount'] - oldValues_Series)
+        df['Actual Proportion (%)'] = df['Current Amount'] / df['Current Amount'].sum()
 
         # --------------------------- Storing Info in TimeLine
         investType.extend(df['Investment Type'].tolist())
-        currentAmount.extend(df['Investment Amount ($)'].tolist())
-        currentWeek.extend([week] * df.shape[0])
+        currentAmount.extend(df['Current Amount'].tolist())
+        currentWeek.extend([week] * distinctInvestments_amount)
         totalSold.extend(df['Total Sold'].tolist())
         totalBought.extend(df['Total Bought'].tolist())
         actualProportion.extend(df['Actual Proportion (%)'].tolist()) 
@@ -330,9 +361,6 @@ def update_asset_volatility(random_growth_value):
         return is_disabled, [True], {'opacity': 1}
 
 
-
-
-
 # Callback for plotting the calculation
 @dash_app.callback(
     Output('charts-div', 'children'),
@@ -343,6 +371,11 @@ def calc_and_display_portfolio(n):
 
     df = pd.DataFrame(investments)
     timeline_df = calc_portfolio(df)
+
+    # When there's no data in 'investments', calc_portfolio returns a string
+    # So if there's no data, don't bother plotting
+    if isinstance(timeline_df, str):
+        return timeline_df
 
     # Create the Pie Chart
     grouped_df = timeline_df.groupby('Investment Type').sum()['Actual Proportion (%)'].reset_index()
