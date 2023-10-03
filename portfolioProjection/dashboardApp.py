@@ -190,20 +190,19 @@ def update_investments_table(
 
 # ------------
 
-def calc_portfolio(df):
+def calc_portfolio(df, portfolioSettings):
 
-    global portfolioSettings
     global investments
 
-    if len(investments) > 0:
+    if investments:
         df = pd.DataFrame(investments)
     else:
-        return 'Investments seems to be empty'
+        if not df.shape[0] > 0:
+            return "Warning: There are no Investments made"
     
-    if portfolioSettings:
-        startInvestment = portfolioSettings.get('Start Investment Amount', 0)
-        monthlyInvestment = portfolioSettings.get('Monthly Investment', 0)
-        investmentTime = portfolioSettings.get('Investment Time (years)', 0)
+    startInvestment = portfolioSettings.get('Start Investment Amount', 0)
+    monthlyInvestment = portfolioSettings.get('Monthly Investment', 0)
+    investmentTime = portfolioSettings.get('Investment Time (years)', 0)
 
 
     distinctInvestments_amount = df.shape[0]
@@ -364,13 +363,23 @@ def update_asset_volatility(random_growth_value):
 # Callback for plotting the calculation
 @dash_app.callback(
     Output('charts-div', 'children'),
-    Input('calculate-button', 'n_clicks')        
+    Input('calculate-button', 'n_clicks'),
+    [
+        dash.dependencies.State('investment-start-amount', 'value'),
+        dash.dependencies.State('investment-monthly-amount', 'value'),
+        dash.dependencies.State('investment-time-slider', 'value')
+    ]      
 )
-def calc_and_display_portfolio(n):
+def calc_and_display_portfolio(n, investment_start_amount, investment_monthly_amount, investment_time):
     global investments
 
+    # Updating the global portfolioSettings before calling calc_portfolio
+    portfolioSettings['Investment Time (years)'] = investment_time
+    portfolioSettings['Start Investment Amount'] = investment_start_amount 
+    portfolioSettings['Monthly Investment'] = investment_monthly_amount
+
     df = pd.DataFrame(investments)
-    timeline_df = calc_portfolio(df)
+    timeline_df = calc_portfolio(df, portfolioSettings)
 
     # When there's no data in 'investments', calc_portfolio returns a string
     # So if there's no data, don't bother plotting
