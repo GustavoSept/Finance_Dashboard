@@ -28,7 +28,8 @@ dash_app.layout = dbc.Container([
     dbc.Row(
         dbc.Col([
             # Your Dash components for user input go here
-            html.Label('-- per-investment settings --'),
+            html.H1('Portfolio Value Projection'),
+            #html.Label('-- per-investment settings --'),
             html.Br(),
             html.Br(),
 
@@ -52,10 +53,15 @@ dash_app.layout = dbc.Container([
             dcc.Input(id='expected-growth', type='number', placeholder='Enter Expected Growth (%)',value=6),
             html.Br(),
 
+
+            dcc.Checklist(id='growth-decay', options=[
+                {'label': 'Enable Growth Decay', 'value': 'True'}
+            ], value=[]),
+
+            html.Br(),
             dcc.Checklist(id='random-growth-check', options=[
                 {'label': 'Enable Random Growth', 'value': 'True'}
             ], value=[]),
-            html.Br(),
     
             html.Label('Asset Volatility'),
             dcc.Dropdown(id='asset-volatility', options=[
@@ -64,13 +70,9 @@ dash_app.layout = dbc.Container([
                 {'label': 'High', 'value': 'high'}
             ], disabled=True, value = 'high'),
 
-            dcc.Checklist(id='growth-decay', options=[
-                {'label': 'Enable Growth Decay', 'value': 'True'}
-            ], value=[]),
-
             html.Br(),
             html.Br(),            
-            html.Label('-- portfolio settings --'),
+            #html.Label('-- per-portfolio settings --'),
 
             html.Br(),
             html.Label('Investment Starting Point'),
@@ -82,9 +84,8 @@ dash_app.layout = dbc.Container([
             html.Br(),
 
             html.Label('Investment Time (years)'),
-            dcc.Slider(id='investment-time-slider', min=0, max=50, step=1, value=25, 
-                       marks={i: str(i) for i in range(0, 51, 5)}),
-
+            dcc.Slider(id='investment-time-slider', min=0, max=40, step=1, value=5, 
+                       marks={i: str(i) for i in range(0, 41, 5)}),
 
             html.Br(),
             html.Button('Calculate Portfolio', id='calculate-button'),
@@ -161,7 +162,7 @@ def update_investments_table(
         return "Investment Type can't be duplicated", prev_investments
 
     # Store investment values pertaining to the whole portfolio
-    portfolioSettings['Investment Time (years)'] = investment_time
+    portfolioSettings['Investment Time (years)'] = min(investment_time, 40) # Just in case the front-end sends a huge value, cap at 40 years
     portfolioSettings['Start Investment Amount'] = investment_start_amount 
     portfolioSettings['Monthly Investment'] = investment_monthly_amount
 
@@ -196,9 +197,7 @@ def calc_portfolio(df, portfolioSettings):
 
     if investments:
         df = pd.DataFrame(investments)
-    else:
-        if not df.shape[0] > 0:
-            return "Warning: There are no Investments made"
+    
     
     startInvestment = portfolioSettings.get('Start Investment Amount', 0)
     monthlyInvestment = portfolioSettings.get('Monthly Investment', 0)
@@ -343,22 +342,11 @@ def calc_portfolio(df, portfolioSettings):
 
 # Callback for enabling/disabling the assetVolatility dropdown based on randomGrowth checkbox
 @dash_app.callback(
-    [
-        Output('asset-volatility', 'disabled'),
-        Output('growth-decay', 'value'),
-        Output('growth-decay', 'style')
-    ],
+    Output('asset-volatility', 'disabled'),
     Input('random-growth-check', 'value')
 )
 def update_asset_volatility(random_growth_value):
-    is_disabled = len(random_growth_value) == 0
-    if is_disabled:
-        # Return the default style for disabled look and set the value to False
-        return is_disabled, [False], {'opacity': 0.5}
-    else:
-        # Return the normal style and set the value to True
-        return is_disabled, [True], {'opacity': 1}
-
+    return len(random_growth_value) == 0
 
 # Callback for plotting the calculation
 @dash_app.callback(
@@ -374,7 +362,7 @@ def calc_and_display_portfolio(n, investment_start_amount, investment_monthly_am
     global investments
 
     # Updating the global portfolioSettings before calling calc_portfolio
-    portfolioSettings['Investment Time (years)'] = investment_time
+    portfolioSettings['Investment Time (years)'] = min(investment_time, 40) # Just in case the front-end sends a huge value, cap at 40 years
     portfolioSettings['Start Investment Amount'] = investment_start_amount 
     portfolioSettings['Monthly Investment'] = investment_monthly_amount
 
