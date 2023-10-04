@@ -27,89 +27,80 @@ dash_app = dash.Dash(__name__, server=app, external_stylesheets=[dbc.themes.BOOT
 dash_app.layout = dbc.Container([
     dbc.Row(
         dbc.Col([
-            # Your Dash components for user input go here
-            html.H1('Portfolio Value Projection'),
-            #html.Label('-- per-investment settings --'),
-            html.Br(),
-            html.Br(),
+            html.H1('Portfolio Value Projection', style={'textAlign': 'center', 'padding': '20px'}),
+            
+            # Investment Settings
+            html.Div([
+                html.Label('Investment Type', style={'font-weight': 'bold'}),
+                dcc.Input(id='investment-type', type='text', placeholder='Enter Investment Type', style={'width': '100%'}),
+                
+                html.Label('Ideal Proportion (%)', style={'font-weight': 'bold'}),
+                dcc.Slider(id='ideal-proportion-slider', min=0, max=100, step=1, value=50, 
+                           marks={i: str(i) + "%" for i in range(0, 101, 10)}),
+                
+                html.Label('Risk Strategy', style={'font-weight': 'bold'}),
+                dcc.Dropdown(id='risk-strategy', options=[
+                    {'label': 'Conservative', 'value': 'conservative'},
+                    {'label': 'Medium', 'value': 'medium'},
+                    {'label': 'Risky', 'value': 'risky'}
+                ], value='risky'),
 
-            html.Label('Investment Type'),
-            dcc.Input(id='investment-type', type='text', placeholder='Enter Investment Type'),
-            html.Br(),
+                html.Label('Expected Growth (%)', style={'font-weight': 'bold'}),
+                dcc.Input(id='expected-growth', type='number', placeholder='Enter Expected Growth (%)', value=6, style={'width': '100%'}),
+                
+                dcc.Checklist(id='growth-decay', options=[
+                    {'label': 'Enable Growth Decay', 'value': 'True'}
+                ], value=[]),
 
-            html.Label('Ideal Proportion (%)'),
-            dcc.Slider(id='ideal-proportion-slider', min=0, max=100, step=1, value=50, 
-                       marks={i: str(i) + "%" for i in range(0, 101, 10)}),
-
-            html.Label('Risk Strategy'),
-            dcc.Dropdown(id='risk-strategy', options=[
-                {'label': 'Conservative', 'value': 'conservative'},
-                {'label': 'Medium', 'value': 'medium'},
-                {'label': 'Risky', 'value': 'risky'}
-            ], value='risky'),
-            html.Br(),
-
-            html.Label('Expected Growth (%)'),
-            dcc.Input(id='expected-growth', type='number', placeholder='Enter Expected Growth (%)',value=6),
-            html.Br(),
-
-
-            dcc.Checklist(id='growth-decay', options=[
-                {'label': 'Enable Growth Decay', 'value': 'True'}
-            ], value=[]),
-
-            html.Br(),
-            dcc.Checklist(id='random-growth-check', options=[
-                {'label': 'Enable Random Growth', 'value': 'True'}
-            ], value=[]),
-    
-            html.Label('Asset Volatility'),
-            dcc.Dropdown(id='asset-volatility', options=[
-                {'label': 'Low', 'value': 'low'},
-                {'label': 'Mid', 'value': 'mid'},
-                {'label': 'High', 'value': 'high'}
-            ], disabled=True, value = 'high'),
+                dcc.Checklist(id='random-growth-check', options=[
+                    {'label': 'Enable Random Growth', 'value': 'True'}
+                ], value=[]),
+                
+                html.Label('Asset Volatility', style={'font-weight': 'bold'}),
+                dcc.Dropdown(id='asset-volatility', options=[
+                    {'label': 'Low', 'value': 'low'},
+                    {'label': 'Mid', 'value': 'mid'},
+                    {'label': 'High', 'value': 'high'}
+                ], disabled=True, value='high')
+            ], style={'background': '#f7f7f7', 'padding': '15px', 'borderRadius': '5px'}),
 
             html.Br(),
-            html.Br(),            
-            #html.Label('-- per-portfolio settings --'),
+
+            # Portfolio Settings
+            html.Div([
+                html.Label('Investment Starting Point', style={'font-weight': 'bold'}),
+                dcc.Input(id='investment-start-amount', type='number', placeholder='Enter Investment Amount', value=1000, style={'width': '100%'}),
+                
+                html.Label('Monthly Investment', style={'font-weight': 'bold'}),
+                dcc.Input(id='investment-monthly-amount', type='number', placeholder='Enter Investment Amount', value=100, style={'width': '100%'}),
+                
+                html.Label('Investment Time (years)', style={'font-weight': 'bold'}),
+                dcc.Slider(id='investment-time-slider', min=0, max=40, step=1, value=2, 
+                           marks={i: str(i) for i in range(0, 41, 5)})
+            ], style={'background': '#e6e6e6', 'padding': '15px', 'borderRadius': '5px'}),
 
             html.Br(),
-            html.Label('Investment Starting Point'),
-            dcc.Input(id='investment-start-amount', type='number', placeholder='Enter Investment Amount',value=1000),             
 
-            html.Br(),
-            html.Label('Monthly Investment'),
-            dcc.Input(id='investment-monthly-amount', type='number', placeholder='Enter Investment Amount',value=100), 
-            html.Br(),
+            # Action Buttons
+            html.Div([
+                html.Button('Calculate Portfolio', id='calculate-button', className='btn btn-primary', style={'marginRight': '10px'}),
+                html.Button('Add Investment', id='apply-button', n_clicks=0, className='btn btn-secondary', style={'marginRight': '10px'}),
+                html.Button('Clean Table', id='clean-table-button', n_clicks=0, className='btn btn-danger'),
+            ]),
 
-            html.Label('Investment Time (years)'),
-            dcc.Slider(id='investment-time-slider', min=0, max=40, step=1, value=2, 
-                       marks={i: str(i) for i in range(0, 41, 5)}),
+            # Error Message Area
+            html.Div(id='error-message-div', style={'color': 'red', 'marginTop': '10px'}),
 
-            html.Br(),
-            html.Button('Calculate Portfolio', id='calculate-button'),
-            html.Button('Add Investment', id='apply-button', n_clicks=0), # Initializing n_clicks as well
-            html.Button('Clean Table', id='clean-table-button', n_clicks=0),
-
-            # Dedicated div for error messages
-            html.Div(id='error-message-div', style={'color': 'red'}),
-
-            # Hidden div to store the previous state
-            # This makes the Null check dynamic, for every new row 
+            # Hidden Containers
             html.Div(id='hidden-div', style={'display': 'none'}),
-
-            # Hidden div to decide whether to hide the table-div
             html.Div(id='hide-table-flag', style={'display': 'none'}),
 
-            
-
-
-            # Placeholder for results (either table or portfolio calculation)
+            # Display Areas
             html.Div(id='table-div'),
             html.Div(id='charts-div')
-        ], width={"size": 6, "offset": 3})),  # Adjusting width to 30% of screen and centering it
-], fluid=True)
+        ], width={"size": 6, "offset": 3})
+    )  
+], fluid=True, style={'marginTop': '20px'})
 
 # --------------------- CALLBACKS SECTION --------------
 
