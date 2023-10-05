@@ -271,6 +271,10 @@ def calc_portfolio(df, portfolioSettings):
         for start in df['Expected Growth (%)']
     ])
 
+    # Decaying Growth from pre-calculated table
+    decayMask = df['Growth Decay'] == True
+    randomGrowthMask = df['Random Growth'] == True
+
     def genPseudoRdNum(randomMean, randomStd, week):
         np.random.seed(week)
 
@@ -286,17 +290,19 @@ def calc_portfolio(df, portfolioSettings):
         trendCycle \
             = (np.sin(week * 0.006 * np.pi) * trendMagnitude) + 0.00001
 
-        return np.random.normal(randomMean * (1+trendCycle), randomStd * volatilityCycle)
-
+        return np.random.normal(randomMean * (1+trendCycle), randomStd * volatilityCycle)    
 
     for week in range(1, investmentTime_inWeeks + 1):
-        # Decaying Growth from pre-calculated table
-        mask = df['Growth Decay'] == True
-        df.loc[mask, 'Expected Growth (%)'] = decay_2DList[mask, week-1]
+        
+        # Getting precalculated values for Decay Growth (where True in decayMask)
+        df.loc[decayMask, 'Expected Growth (%)'] = decay_2DList[decayMask, week-1]
 
-        # Compound interest conversion from annual to weekly growth
-        df['weeklyGrowth'] = ((1 + df['Expected Growth (%)']) ** (1/52) - 1)\
-                                 * genPseudoRdNum(1, df['Asset Volatility'], week)
+        # Ccompound interest conversion from annual to weekly growth
+        df['weeklyGrowth'] = (1 + df['Expected Growth (%)']) ** (1/52) - 1
+
+        # Adding randomness only where randomGrowthMask is True
+        df.loc[randomGrowthMask, 'weeklyGrowth'] = df.loc[randomGrowthMask, 'weeklyGrowth'] * genPseudoRdNum(1, df.loc[randomGrowthMask, 'Asset Volatility'], week)
+
         # Casting compound growth
         df['Current Amount'] += df['Current Amount'] * df['weeklyGrowth']        
         
