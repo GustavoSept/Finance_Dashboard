@@ -157,7 +157,7 @@ def update_investments_table(
         if not investments:
             return no_update, no_update, 'show', 'Please add investments before calculating.'
         else:
-            return no_update, no_update, 'hide', no_update  # Hide the table
+            return no_update, no_update, 'hide', ''  # Hide the table and remove warnings
 
     # Check for None values
     inputs = [ideal_proportion, risk_strategy, investment_start_amount, investment_monthly_amount, expected_growth, asset_volatility]
@@ -179,7 +179,6 @@ def update_investments_table(
     portfolioSettings['Start Investment Amount'] = investment_start_amount 
     portfolioSettings['Monthly Investment'] = investment_monthly_amount
 
-
     investment = {
         'Investment Type': investment_type.upper(),
         'Ideal Proportion (%)': ideal_proportion,
@@ -196,15 +195,16 @@ def update_investments_table(
     # Convert investments list to DataFrame for display
     df = pd.DataFrame(investments)
 
-    # Returns 3 things:
+    # Returns 4 things:
     # The table itself
     # Stores investments in the hidden-div, for rollback reasons
-    # 'show', to show the table again if it's hidden 
+    # 'show', to show the table again if it's hidden
+    # remove error messages when adding investments (sending empty string)
     return dash_table.DataTable(
         id='investment-table',
         columns=[{'name': i, 'id': i} for i in df.columns],
         data=df.to_dict('records')
-    ), str(investments), 'show', no_update
+    ), str(investments), 'show', ''
     
 # ------------
 
@@ -290,7 +290,7 @@ def calc_portfolio(df, portfolioSettings):
         # Mini Bull-Bear cycles every 3 years
         trendMagnitude = 0.5
         trendCycle \
-            = (np.sin(week * 0.006 * np.pi) * trendMagnitude) + 0.00001
+            = (np.sin(week * 0.006 * np.pi) * trendMagnitude) - 0.00001
 
         return np.random.normal(randomMean * (1+trendCycle), randomStd * volatilityCycle)    
 
@@ -406,6 +406,19 @@ def calc_and_display_portfolio(n, investment_start_amount, investment_monthly_am
     if isinstance(timeline_df, str):
         return timeline_df
 
+
+     # Calculate the current worth of the portfolio
+    current_worth = timeline_df[timeline_df['Week'] == timeline_df['Week'].max()]['Current Amount ($)'].sum()
+    
+    # Calculate the percentage growth compared to 'Start Investment Amount'
+    percentage_growth = ((current_worth - investment_start_amount) / investment_start_amount) * 100
+
+    # Summary Info
+    summary_div = html.Div([
+        html.H3(f"Your portfolio is now worth: ${current_worth:,.2f}", style={'color': 'green', 'font-weight': 'bold'}),
+        html.H5(f"Your portfolio grew by: {percentage_growth:.2f}%")
+    ], style={'border': '1px solid #ddd', 'padding': '10px', 'border-radius': '5px', 'margin-bottom': '20px'})
+
     # Create the Pie Chart
     grouped_df = timeline_df.groupby('Investment Type').sum()['Actual Proportion (%)'].reset_index()
     pie_chart = dcc.Graph(
@@ -439,7 +452,31 @@ def calc_and_display_portfolio(n, investment_start_amount, investment_monthly_am
             )
     )
 
-    return [pie_chart, line_chart_by_type, line_chart_total]
+    # Mini table with total sold and bought amounts for each asset
+    mini_table_data = timeline_df[['Investment Type', 'Total Sold', 'Total Bought']].groupby('Investment Type', as_index = False).sum().round(2)
+    mini_table = dash_table.DataTable(
+        id='mini-investment-table',
+        columns=[{'name': i, 'id': i} for i in mini_table_data.columns],
+        data=mini_table_data.to_dict('records'),
+        style_table={'margin-top': '20px'}
+    )
+
+    return [
+        summary_div,        
+        # Row for the charts
+        dbc.Row([
+            dbc.Col([
+                mini_table
+            ], width=6, align="center"),
+            
+            dbc.Col([
+                pie_chart
+            ], width=6)
+        ]),
+        line_chart_by_type, 
+        line_chart_total
+    ]
+
 
 @dash_app.callback(
     Output('table-div', 'style'),
