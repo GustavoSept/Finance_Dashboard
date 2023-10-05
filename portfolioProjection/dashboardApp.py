@@ -275,8 +275,10 @@ def calc_portfolio(df, portfolioSettings):
     decayMask = df['Growth Decay'] == True
     randomGrowthMask = df['Random Growth'] == True
 
-    def genPseudoRdNum(randomMean, randomStd, week):
-        np.random.seed(week)
+    def genPseudoRdNum(randomMean, randomStd, week, rows, growthSum, nameLen):
+        # This makes the seed predictable, enabling the user to test portfolio performance on average if he wants to.
+        seedCalc = int((week + nameLen + rows) * growthSum)
+        np.random.seed(seedCalc)
 
         # About 2 Volatility cycles every year
         volatilityMagnitude = 0.5
@@ -301,7 +303,14 @@ def calc_portfolio(df, portfolioSettings):
         df['weeklyGrowth'] = (1 + df['Expected Growth (%)']) ** (1/52) - 1
 
         # Adding randomness only where randomGrowthMask is True
-        df.loc[randomGrowthMask, 'weeklyGrowth'] = df.loc[randomGrowthMask, 'weeklyGrowth'] * genPseudoRdNum(1, df.loc[randomGrowthMask, 'Asset Volatility'], week)
+        df.loc[randomGrowthMask, 'weeklyGrowth'] = df.loc[randomGrowthMask, 'weeklyGrowth'] * genPseudoRdNum(1,
+                                                                                                             df.loc[randomGrowthMask,
+                                                                                                                    'Asset Volatility'],
+                                                                                                                    week,
+                                                                                                                    rows = df.shape[0],
+                                                                                                                    growthSum = df['Expected Growth (%)'].sum(),
+                                                                                                                    nameLen = df['Investment Type'].str.len().sum()
+                                                                                                            )
 
         # Casting compound growth
         df['Current Amount'] += df['Current Amount'] * df['weeklyGrowth']        
