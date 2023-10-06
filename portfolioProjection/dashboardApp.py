@@ -147,7 +147,7 @@ dash_app.layout = dbc.Container([
 
                     dbc.Col([
                         html.Label('Bull-Bear Cycle Duration (in years)', style=LABEL_STYLE),
-                        dcc.Slider(id='bullbear-duration-slider', min=0, max=15, step=1, value=2,
+                        dcc.Slider(id='bullbear-duration-slider', min=0, max=15, step=1, value=5,
                                 marks={i: str(i) for i in range(0, 16, 5)}),
                         dbc.Tooltip("Bull-Bear Cycles alter the mean price of the asset, up and down.",
                                     target="bullbear-duration-slider",
@@ -164,7 +164,7 @@ dash_app.layout = dbc.Container([
                                     )
                     ], width=6, align="center")
                 ])
-            ], style={'background': '#f5f5f5', 'padding': '2px 15px 15px 15px', 'borderRadius': '5px'}),
+            ], id='advanced-settings-div', style={'background': '#f5f5f5', 'padding': '2px 15px 15px 15px', 'borderRadius': '5px'}),
             
             html.Br(),
 
@@ -481,13 +481,21 @@ def calc_portfolio(df, portfolioSettings):
 
     return timeline_df
 
-# Callback for enabling/disabling the assetVolatility dropdown based on randomGrowth checkbox
+# Callback for disabling options when random-growth-check is off
 @dash_app.callback(
-    Output('asset-volatility', 'disabled'),
-    Input('random-growth-check', 'value')
+    [
+        Output('asset-volatility', 'disabled'),
+        Output('advanced-settings-div', 'style')
+    ],
+    [Input('random-growth-check', 'value')]
 )
-def update_asset_volatility(random_growth_value):
-    return len(random_growth_value) == 0
+def update_asset_volatility_and_advanced_settings(random_growth_value):
+    is_disabled = len(random_growth_value) == 0
+    # If checkbox is unchecked (i.e., value is empty), hide the div
+    div_style = {'display': 'none'} if is_disabled else {'background': '#f5f5f5', 'padding': '2px 15px 15px 15px', 'borderRadius': '5px'}
+    
+    return is_disabled, div_style
+
 
 # Callback for plotting the calculation
 @dash_app.callback(
@@ -586,7 +594,7 @@ def calc_and_display_portfolio(n, investment_start_amount, investment_monthly_am
         line_chart_total
     ]
 
-
+# Callback for hidding the table
 @dash_app.callback(
     Output('table-div', 'style'),
     Input('hide-table-flag', 'children')
@@ -598,8 +606,6 @@ def toggle_table_display(flag):
         return {}  # Show the table
     else:
         return {}  # Default state (show the table)
-
-
 
 
 if __name__ == '__main__':
