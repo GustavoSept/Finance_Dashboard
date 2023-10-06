@@ -121,21 +121,21 @@ dash_app.layout = dbc.Container([
             
             html.Br(),
 
-            # Advanced Settings
+            # Advanced Investments Settings
             html.Div([
-                html.H6('Advanced Settings', style={**H6_STYLE, 'color': '#f26c0c'}),
+                html.H6('Advanced Investments Settings', style={**H6_STYLE, 'color': '#f26c0c'}),
                 dbc.Row([
                     dbc.Col([
                         html.Label('Volatility Cycle Duration (in years)', style=LABEL_STYLE),
-                        dcc.Slider(id='volatility-duration-slider', min=0, max=15, step=1, value=2, 
-                                marks={i: str(i) for i in range(0, 16, 5)}),
+                        dcc.Slider(id='volatility-duration-slider', min=0, max=15, step=0.5, value=2, 
+                                marks={i: str(i) for i in range(0, 16, 1)}),
                         dbc.Tooltip("Volatility Cycles keep the mean asset price intact, it just impacts the spread of the volatility.",
                                     target="volatility-duration-slider",
                                     style=TOOLTIP_STYLE,
                                     delay={"show": 450, "hide": 100},
                                     ),
 
-                        html.Label('Volatility Magnitude', style=LABEL_STYLE),
+                        html.Label('Volatility Magnitude Multiplier', style=LABEL_STYLE),
                         dcc.Input(id='volatility-magnitude', type='number', placeholder='Enter Investment Amount', value=0.5, style={'width': '100%'}),
                         dbc.Tooltip("Set how intense the volatility cycles are.",
                                     target="volatility-magnitude",
@@ -147,15 +147,15 @@ dash_app.layout = dbc.Container([
 
                     dbc.Col([
                         html.Label('Bull-Bear Cycle Duration (in years)', style=LABEL_STYLE),
-                        dcc.Slider(id='bullbear-duration-slider', min=0, max=15, step=1, value=5,
-                                marks={i: str(i) for i in range(0, 16, 5)}),
+                        dcc.Slider(id='bullbear-duration-slider', min=0, max=15, step=0.5, value=5,
+                                marks={i: str(i) for i in range(0, 16, 1)}),
                         dbc.Tooltip("Bull-Bear Cycles alter the mean price of the asset, up and down.",
                                     target="bullbear-duration-slider",
                                     style=TOOLTIP_STYLE,
                                     delay={"show": 450, "hide": 100},
                                     ),
 
-                        html.Label('Bull-Bear Magnitude', style=LABEL_STYLE),
+                        html.Label('Bull-Bear Magnitude Multiplier', style=LABEL_STYLE),
                         dcc.Input(id='bullbear-magnitude', type='number', placeholder='Enter Investment Amount', value=0.5, style={'width': '100%'}),
                         dbc.Tooltip("Set how intense the Bull-Bear cycles are.",
                                     target="bullbear-magnitude",
@@ -201,7 +201,7 @@ dash_app.layout = dbc.Container([
             html.Div(id='error-message-div', style={'color': 'red', 'marginTop': '10px'}),
 
             # Hidden Containers
-            html.Div(id='hidden-div', style={'display': 'none'}),
+            html.Div(id='div-assetsBackup', style={'display': 'none'}),
             html.Div(id='hide-table-flag', style={'display': 'none'}),
 
             # Display Areas
@@ -217,7 +217,7 @@ dash_app.layout = dbc.Container([
 @dash_app.callback(
     [
         Output('table-div', 'children'),
-        Output('hidden-div', 'children'),
+        Output('div-assetsBackup', 'children'),
         Output('hide-table-flag', 'children'),
         Output('error-message-div', 'children')
     ]
@@ -238,18 +238,24 @@ dash_app.layout = dbc.Container([
         dash.dependencies.State('random-growth-check', 'value'),
         dash.dependencies.State('asset-volatility', 'value'),
         dash.dependencies.State('growth-decay', 'value'),
-        dash.dependencies.State('hidden-div', 'children')
+        dash.dependencies.State('volatility-duration-slider', 'value'),
+        dash.dependencies.State('volatility-magnitude', 'value'),
+        dash.dependencies.State('bullbear-duration-slider', 'value'),
+        dash.dependencies.State('bullbear-magnitude', 'value'),
+        dash.dependencies.State('div-assetsBackup', 'children')
     ]
 )
 def update_investments_table(
     apply_n,clean_n,calc_n,investment_type,
     ideal_proportion,risk_strategy,investment_start_amount, investment_monthly_amount,
     investment_time,expected_growth,random_growth,
-    asset_volatility,growth_decay,prev_investments):
+    asset_volatility,growth_decay,volatility_duration, volatility_magnitude,
+    bullbear_duration, bullbear_magnitude, prev_investments):
 
     global investments
     global portfolioSettings
 
+    # ------------------------------------------------ ERROR CHECKING ----------------------------------
     # Detecting which button was pressed
     ctx = dash.callback_context
     if not ctx.triggered:
@@ -283,6 +289,8 @@ def update_investments_table(
     elif investment_type.upper() in [item['Investment Type'] for item in investments]:
         return no_update, prev_investments, 'show', "Investment Type can't be duplicated"
 
+    # ------------------------------------------------ STORING VALUES ----------------------------------
+
     # Store investment values pertaining to the whole portfolio
     portfolioSettings['Investment Time (years)'] = min(investment_time, 40) # Just in case the front-end sends a huge value, cap at 40 years
     portfolioSettings['Start Investment Amount'] = investment_start_amount 
@@ -295,8 +303,11 @@ def update_investments_table(
         'Expected Growth (%)': expected_growth,
         'Random Growth': True if 'True' in random_growth else False,
         'Asset Volatility': asset_volatility,
-        'Growth Decay': True if 'True' in growth_decay else False
-
+        'Growth Decay': True if 'True' in growth_decay else False,
+        'Volatility Duration': volatility_duration, 
+        'Volatility Magnitude': volatility_magnitude,
+        'BullBear Duration': bullbear_duration,
+        'BullBear Magnitude': bullbear_magnitude
     }
 
     investments.append(investment)
@@ -306,7 +317,7 @@ def update_investments_table(
 
     # Returns 4 things:
     # The table itself
-    # Stores investments in the hidden-div, for rollback reasons
+    # Stores investments in the div-assetsBackup, for rollback reasons
     # 'show', to show the table again if it's hidden
     # remove error messages when adding investments (sending empty string)
     return dash_table.DataTable(
@@ -314,7 +325,7 @@ def update_investments_table(
         columns=[{'name': i, 'id': i} for i in df.columns],
         data=df.to_dict('records')
     ), str(investments), 'show', ''
-    
+
 # ------------
 
 def calc_portfolio(df, portfolioSettings):
@@ -384,22 +395,23 @@ def calc_portfolio(df, portfolioSettings):
     decayMask = df['Growth Decay'] == True
     randomGrowthMask = df['Random Growth'] == True
 
-    def genPseudoRdNum(randomMean, randomStd, week, rows, growthSum, nameLen):
+    def genPseudoRdNum(randomMean, randomStd, week, rows, growthSum, nameLen, vol_Dur, vol_Mag, trend_Dur, trend_Mag):
         # This makes the seed predictable, enabling the user to test portfolio performance on average if he wants to.
         seedCalc = int((week + nameLen + rows) * growthSum)
         np.random.seed(seedCalc)
 
-        # About 2 Volatility cycles every year
-        volatilityMagnitude = 0.5
+        # Formula for translating years to the phased cycle 
+        transformed_vol_Dur = (1/vol_Dur/52)
+        transformed_trend_Dur = (1/trend_Dur/52)
+
         volatilityCycle \
             = (np.abs               
-                (np.sin(week * 0.035 * np.pi) * volatilityMagnitude)             
+                (np.sin(week * transformed_vol_Dur * np.pi) * vol_Mag)             
             ) + 0.00001
         
         # Mini Bull-Bear cycles every 3 years
-        trendMagnitude = 0.5
         trendCycle \
-            = (np.sin(week * 0.006 * np.pi) * trendMagnitude) - 0.00001
+            = (np.sin(week * transformed_trend_Dur * np.pi) * trend_Mag) - 0.00001
 
         return np.random.normal(randomMean * (1+trendCycle), randomStd * volatilityCycle)    
 
@@ -412,14 +424,20 @@ def calc_portfolio(df, portfolioSettings):
         df['weeklyGrowth'] = (1 + df['Expected Growth (%)']) ** (1/52) - 1
 
         # Adding randomness only where randomGrowthMask is True
-        df.loc[randomGrowthMask, 'weeklyGrowth'] = df.loc[randomGrowthMask, 'weeklyGrowth'] * genPseudoRdNum(1,
-                                                                                                             df.loc[randomGrowthMask,
-                                                                                                                    'Asset Volatility'],
-                                                                                                                    week,
-                                                                                                                    rows = df.shape[0],
-                                                                                                                    growthSum = df['Expected Growth (%)'].sum(),
-                                                                                                                    nameLen = df['Investment Type'].str.len().sum()
-                                                                                                            )
+        df.loc[randomGrowthMask, 'weeklyGrowth'] \
+                = df.loc[randomGrowthMask, 'weeklyGrowth'] * genPseudoRdNum(
+                                                                        1,
+                                                                        df.loc[randomGrowthMask,
+                                                                            'Asset Volatility'],
+                                                                            week,
+                                                                            rows = df.shape[0],
+                                                                            growthSum = df['Expected Growth (%)'].sum(),
+                                                                            nameLen = df['Investment Type'].str.len().sum(),
+                                                                            vol_Dur = df.loc[randomGrowthMask,'Volatility Duration'],
+                                                                            vol_Mag = df.loc[randomGrowthMask,'Volatility Magnitude'],
+                                                                            trend_Dur = df.loc[randomGrowthMask,'BullBear Duration'],
+                                                                            trend_Mag = df.loc[randomGrowthMask,'BullBear Magnitude']
+                                                            )
 
         # Casting compound growth
         df['Current Amount'] += df['Current Amount'] * df['weeklyGrowth']        
@@ -476,6 +494,7 @@ def calc_portfolio(df, portfolioSettings):
         'Total Sold': totalSold,
         'Total Bought': totalBought,
         'Actual Proportion (%)': actualProportion
+        
     })
   
 
