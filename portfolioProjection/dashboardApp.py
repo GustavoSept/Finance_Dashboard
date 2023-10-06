@@ -38,8 +38,8 @@ dash_app.layout = dbc.Container([
                 html.H6('Investment Settings', style={**H6_STYLE, 'color': '#0a8a06'}),
                 dbc.Row([
                     dbc.Col([
-                        html.Label('Investment Type', style=LABEL_STYLE),
-                        dcc.Input(id='investment-type', type='text', placeholder='Enter Investment Type', style={'width': '100%'}),
+                        html.Label('Investment ID', style=LABEL_STYLE),
+                        dcc.Input(id='investment-type', type='text', placeholder='Enter Investment ID', style={'width': '100%'}),
                         dbc.Tooltip("Enter the name or code of the investment",
                                     target="investment-type",
                                     style=TOOLTIP_STYLE,
@@ -48,7 +48,7 @@ dash_app.layout = dbc.Container([
                     ], width=6, align="center"),
                     
                     dbc.Col([
-                        html.Label('Risk Strategy', style=LABEL_STYLE),
+                        html.Label('Investment Strategy', style=LABEL_STYLE),
                         dcc.Dropdown(id='risk-strategy', options=[
                             {'label': 'Conservative', 'value': 'conservative'},
                             {'label': 'Medium', 'value': 'medium'},
@@ -127,7 +127,7 @@ dash_app.layout = dbc.Container([
                 dbc.Row([
                     dbc.Col([
                         html.Label('Volatility Cycle Duration (in years)', style=LABEL_STYLE),
-                        dcc.Slider(id='volatility-duration-slider', min=0, max=15, step=0.5, value=2, 
+                        dcc.Slider(id='volatility-duration-slider', min=0.5, max=15, step=0.5, value=2, 
                                 marks={i: str(i) for i in range(0, 16, 1)}),
                         dbc.Tooltip("Volatility Cycles keep the mean asset price intact, it just impacts the spread of the volatility.",
                                     target="volatility-duration-slider",
@@ -147,7 +147,7 @@ dash_app.layout = dbc.Container([
 
                     dbc.Col([
                         html.Label('Bull-Bear Cycle Duration (in years)', style=LABEL_STYLE),
-                        dcc.Slider(id='bullbear-duration-slider', min=0, max=15, step=0.5, value=5,
+                        dcc.Slider(id='bullbear-duration-slider', min=0.5, max=15, step=0.5, value=5,
                                 marks={i: str(i) for i in range(0, 16, 1)}),
                         dbc.Tooltip("Bull-Bear Cycles alter the mean price of the asset, up and down.",
                                     target="bullbear-duration-slider",
@@ -285,9 +285,9 @@ def update_investments_table(
     
     # Special Null and duplicated checks for investment_type, since it's a text value.
     if not investment_type or not investment_type.strip():
-        return no_update, prev_investments, 'show', "Investment Type cannot be empty!"
-    elif investment_type.upper() in [item['Investment Type'] for item in investments]:
-        return no_update, prev_investments, 'show', "Investment Type can't be duplicated"
+        return no_update, prev_investments, 'show', "Investment ID cannot be empty!"
+    elif investment_type.upper() in [item['Investment ID'] for item in investments]:
+        return no_update, prev_investments, 'show', "Investment ID can't be duplicated"
 
     # ------------------------------------------------ STORING VALUES ----------------------------------
 
@@ -297,9 +297,9 @@ def update_investments_table(
     portfolioSettings['Monthly Investment'] = investment_monthly_amount
 
     investment = {
-        'Investment Type': investment_type.upper(),
+        'Investment ID': investment_type.upper(),
         'Ideal Proportion (%)': ideal_proportion,
-        'Risk Strategy': risk_strategy,        
+        'Investment Strategy': risk_strategy,        
         'Expected Growth (%)': expected_growth,
         'Random Growth': True if 'True' in random_growth else False,
         'Asset Volatility': asset_volatility,
@@ -343,40 +343,39 @@ def calc_portfolio(df, portfolioSettings):
 
     distinctInvestments_amount = df.shape[0]
     # re-scaling idealProportion and expectedGrowth
-    df['Ideal Proportion (%)'] = df['Ideal Proportion (%)'] * (100 / df['Ideal Proportion (%)'].sum()) / 100
-    df['Expected Growth (%)'] = df['Expected Growth (%)'] / 100
+    df['Ideal Proportion (%)'] /= df['Ideal Proportion (%)'].sum()
+    df['Expected Growth (%)'] /= 100
 
-    # Re-labeling risks
-    df['Risk Strategy'] = df['Risk Strategy'].replace({
-                                                'conservative': 1.0375,
-                                                'medium': 1.075,
-                                                'risky': 1.15})
+    # Re-labeling risks and volatility
+    df['Investment Strategy'] = df['Investment Strategy'].map({
+                                                                'conservative': 1.0375,
+                                                                'medium': 1.075,
+                                                                'risky': 1.15
+                                                            })
+
+    df['Asset Volatility'] = df['Asset Volatility'].map({
+                                                        'high': 15.25,
+                                                        'mid': 3.5,
+                                                        'low': 1
+                                                    })
     
+    # Disabling random number generation where necessary
+    df.loc[df['Random Growth'] == False, 'Asset Volatility'] = 0
+
     # Basically a linear function, with sine-wave at the higher end to smooth it.
-    df['Treshold Proportion'] = \
+    thresholdInvestment = \
         np.minimum(
             (np.sin(df['Ideal Proportion (%)'] * 0.5 * np.pi)
                 + (df['Ideal Proportion (%)'] * 0.7))/ (0.7 + 1),
-            df['Ideal Proportion (%)'] * df['Risk Strategy']
+            df['Ideal Proportion (%)'] * df['Investment Strategy']
     )
 
     investmentTime_inWeeks = investmentTime * 52
-    df['Asset Volatility'] = df['Asset Volatility'].replace({'high':15.25, 'mid': 3.5, 'low':1})
-
-    # Disabling random number generation where necessary
-    df['Asset Volatility'] = df.apply(lambda row: 0 if row['Random Growth'] == 0 else row['Asset Volatility'], axis=1)
     
     # Initializing balances and setting actual investment amount for each investment
-    df['Total Sold'] = np.zeros(distinctInvestments_amount)
-    df['Total Bought'] = np.zeros(distinctInvestments_amount)
-    df['Current Amount'] = startInvestment * df['Ideal Proportion (%)']
-    investType = list(df['Investment Type'])
-    currentAmount = list(df['Current Amount'])
-    currentWeek = list(np.zeros(distinctInvestments_amount))
-    totalSold = list(np.zeros(distinctInvestments_amount))
-    totalBought = list(np.zeros(distinctInvestments_amount))
-    actualProportion = list(np.zeros(distinctInvestments_amount))
-
+    totalSold = np.zeros(distinctInvestments_amount)
+    totalBought = np.zeros(distinctInvestments_amount)    
+    currentAmount = np.array(startInvestment * df['Ideal Proportion (%)'])
 
     # (if enabled) Pre-calculate Expected Growth decay
     # Tends to the median growth (if growth > median)
@@ -391,29 +390,43 @@ def calc_portfolio(df, portfolioSettings):
         for start in df['Expected Growth (%)']
     ])
 
-    # Decaying Growth from pre-calculated table
+    # pre-calculate masks
     decayMask = df['Growth Decay'] == True
-    randomGrowthMask = df['Random Growth'] == True
 
-    def genPseudoRdNum(randomMean, randomStd, week, rows, growthSum, nameLen, vol_Dur, vol_Mag, trend_Dur, trend_Mag):
+    # ------------ Pre calculating random values section
+    def vectorized_genPseudoRdNum(weeks, randomStd, growthSum, nameLen, vol_Dur, vol_Mag, trend_Dur, trend_Mag):
         # This makes the seed predictable, enabling the user to test portfolio performance on average if he wants to.
-        seedCalc = int((week + nameLen + rows) * growthSum)
+        nameLen_ext = np.tile(nameLen, (len(weeks), 1)) # making nameLen match the shape of weeks
+        seedCalc = ((weeks + nameLen_ext[:,0]) * growthSum).astype(int)
         np.random.seed(seedCalc)
-
+        
         # Formula for translating years to the phased cycle 
         transformed_vol_Dur = (1/vol_Dur/52)
         transformed_trend_Dur = (1/trend_Dur/52)
-
-        volatilityCycle \
-            = (np.abs               
-                (np.sin(week * transformed_vol_Dur * np.pi) * vol_Mag)             
-            ) + 0.00001
         
-        # Mini Bull-Bear cycles every 3 years
-        trendCycle \
-            = (np.sin(week * transformed_trend_Dur * np.pi) * trend_Mag) - 0.00001
+        volatilityCycle = np.abs(np.sin(weeks[:, np.newaxis] * transformed_vol_Dur * np.pi) * vol_Mag) + 1e-10
+        trendCycle = np.sin(weeks[:, np.newaxis] * transformed_trend_Dur * np.pi) * trend_Mag - 1e-10
+        
+        # Create an array of random numbers with shape (investmentTime_inWeeks, number_of_rows)
+        random_nums = np.array([np.random.normal(1 * (1+trendCycle[i]), randomStd * volatilityCycle[i]) 
+                                for i in range(len(weeks))])
+        
+        return random_nums
 
-        return np.random.normal(randomMean * (1+trendCycle), randomStd * volatilityCycle)    
+    if df['Random Growth'].any(): # skipping pre-calculation if there's no randomGrowth checked
+        weeks = np.arange(1, investmentTime_inWeeks + 1)
+        random_values = vectorized_genPseudoRdNum(
+            weeks, 
+            df['Asset Volatility'].to_numpy(), 
+            df['Expected Growth (%)'].sum(),
+            df['Investment ID'].str.len().to_numpy(),
+            df['Volatility Duration'].to_numpy(),
+            df['Volatility Magnitude'].to_numpy(),
+            df['BullBear Duration'].to_numpy(),
+            df['BullBear Magnitude'].to_numpy()
+        )
+
+    results = []
 
     for week in range(1, investmentTime_inWeeks + 1):
         
@@ -421,84 +434,56 @@ def calc_portfolio(df, portfolioSettings):
         df.loc[decayMask, 'Expected Growth (%)'] = decay_2DList[decayMask, week-1]
 
         # Ccompound interest conversion from annual to weekly growth
-        df['weeklyGrowth'] = (1 + df['Expected Growth (%)']) ** (1/52) - 1
+        weekGrowth= (1 + df['Expected Growth (%)']) ** (1/52) - 1
 
-        # Adding randomness only where randomGrowthMask is True
-        df.loc[randomGrowthMask, 'weeklyGrowth'] \
-                = df.loc[randomGrowthMask, 'weeklyGrowth'] * genPseudoRdNum(
-                                                                        1,
-                                                                        df.loc[randomGrowthMask,
-                                                                            'Asset Volatility'],
-                                                                            week,
-                                                                            rows = df.shape[0],
-                                                                            growthSum = df['Expected Growth (%)'].sum(),
-                                                                            nameLen = df['Investment Type'].str.len().sum(),
-                                                                            vol_Dur = df.loc[randomGrowthMask,'Volatility Duration'],
-                                                                            vol_Mag = df.loc[randomGrowthMask,'Volatility Magnitude'],
-                                                                            trend_Dur = df.loc[randomGrowthMask,'BullBear Duration'],
-                                                                            trend_Mag = df.loc[randomGrowthMask,'BullBear Magnitude']
-                                                            )
+        # skipping calculation if there's no randomGrowth checked
+        if df['Random Growth'].any():
+            weekGrowth *=  random_values[week - 1]
+
 
         # Casting compound growth
-        df['Current Amount'] += df['Current Amount'] * df['weeklyGrowth']        
-        
-        balance = df['Current Amount'].sum() # new balance
+        currentAmount += currentAmount * weekGrowth
 
         # -------------------- Rebalancing Portfolio Section
         
-        df['Threshold Investment Amount'] = df['Treshold Proportion'] * balance
-        df['Ideal Investment Amount'] = df['Ideal Proportion (%)'] * balance
+        thresholdInvestment *= currentAmount.sum()
+        idealInvestment = df['Ideal Proportion (%)'] * currentAmount.sum()
+
 
         # Calculate the Selling Delta based on threshold trigger
-        df['Selling Delta'] = np.where(df['Current Amount'] > df['Threshold Investment Amount'],
-                                    df['Current Amount'] - df['Threshold Investment Amount'],
-                                    0)
-        df['Total Sold'] += df['Selling Delta']
+        sellingDelta = np.maximum(currentAmount - thresholdInvestment, 0)
+
+        totalSold += sellingDelta
 
         # Update the 'Current Amount' column based on threshold trigger
-        df.loc[df['Current Amount'] > df['Threshold Investment Amount'],
-               'Current Amount'] = df['Threshold Investment Amount']
-        soldAmount = df['Selling Delta'].sum()
+        currentAmount = np.minimum(currentAmount, thresholdInvestment)
 
-        oldValues_Series = df['Current Amount'] # Later, we'll calculate how much we bought
+        soldAmount = sellingDelta.sum()
+
+        oldValues_Series = currentAmount # To calculate how much we bought, later
 
         # Calculate toBuy delta (how much each investment needs to be bought in theory)
-        df['toBuy Delta'] = np.where(df['Current Amount'] < df['Ideal Investment Amount'],
-                                    df['Ideal Investment Amount'] - df['Current Amount'],
-                                    0)
+        toBuy_Delta = np.maximum(idealInvestment - currentAmount, 0)
+
         # Actually 'buying' assets, with the money left in 'soldAmount' + Monthly Contributions
-        df['Current Amount'] = np.where(df['Current Amount'] < df['Ideal Investment Amount'],
-                                            ((df['toBuy Delta'] * (100 / df['toBuy Delta'].sum()) / 100)
-                                                * int(soldAmount + monthlyInvestment)) + df['Current Amount'],
-                                            df['Current Amount']
-                                        )
+        #  First half: transform toBuy_Delta in proportion
+        # Second half: multiply each proportion with the amount of money in the balance
+        currentAmount += (toBuy_Delta * (100 / (toBuy_Delta.sum() + 1e-10)) / 100) * int(soldAmount + monthlyInvestment)
 
 
-        df['Total Bought'] = df['Total Bought'] + (df['Current Amount'] - oldValues_Series)
-        df['Actual Proportion (%)'] = df['Current Amount'] / df['Current Amount'].sum()
-
+        totalBought += (currentAmount - oldValues_Series)
+        actualProportion = currentAmount / (currentAmount.sum() + 1e-10)
+        
         # --------------------------- Storing Info in TimeLine
-        investType.extend(df['Investment Type'].tolist())
-        currentAmount.extend(df['Current Amount'].tolist())
-        currentWeek.extend([week] * distinctInvestments_amount)
-        totalSold.extend(df['Total Sold'].tolist())
-        totalBought.extend(df['Total Bought'].tolist())
-        actualProportion.extend(df['Actual Proportion (%)'].tolist()) 
-        
-        
-    # Creating the actual dataFrame for timeline
-    timeline_df = pd.DataFrame({
-        'Investment Type': investType,
-        'Current Amount ($)': currentAmount,
-        'Week': currentWeek,
-        'Total Sold': totalSold,
-        'Total Bought': totalBought,
-        'Actual Proportion (%)': actualProportion
-        
-    })
-  
+        results.extend(list(zip(df['Investment ID'], currentAmount, [week]*distinctInvestments_amount, totalSold, totalBought, actualProportion)))
 
-    return timeline_df
+
+    return pd.DataFrame(
+                        results,
+                        columns=[
+                            'Investment ID','Current Amount ($)','Week',
+                            'Total Sold','Total Bought','Actual Proportion (%)'
+                        ])
 
 # Callback for disabling options when random-growth-check is off
 @dash_app.callback(
@@ -556,24 +541,24 @@ def calc_and_display_portfolio(n, investment_start_amount, investment_monthly_am
     ], style={'border': '1px solid #ddd', 'padding': '10px', 'border-radius': '5px', 'margin-bottom': '20px'})
 
     # Create the Pie Chart
-    grouped_df = timeline_df.groupby('Investment Type').sum()['Actual Proportion (%)'].reset_index()
+    grouped_df = timeline_df.groupby('Investment ID').sum()['Actual Proportion (%)'].reset_index()
     pie_chart = dcc.Graph(
         figure=px.pie(
             grouped_df,
-            names='Investment Type',
+            names='Investment ID',
             values='Actual Proportion (%)',
-            title="Investment Type Distribution"
+            title="Investment ID Distribution"
             )
     )
 
-    # Create the Line Chart for each Investment Type
+    # Create the Line Chart for each Investment ID
     line_chart_by_type = dcc.Graph(
         figure=px.line(
             timeline_df,
             x='Week',
             y='Current Amount ($)',
-            color='Investment Type',
-            title="Current Amount ($) through Time by Investment Type"
+            color='Investment ID',
+            title="Current Amount ($) through Time by Investment ID"
             )
     )
 
@@ -589,7 +574,7 @@ def calc_and_display_portfolio(n, investment_start_amount, investment_monthly_am
     )
 
     # Mini table with total sold and bought amounts for each asset
-    mini_table_data = timeline_df[['Investment Type', 'Total Sold', 'Total Bought']].groupby('Investment Type', as_index = False).sum().round(2)
+    mini_table_data = timeline_df[['Investment ID', 'Total Sold', 'Total Bought']].groupby('Investment ID', as_index = False).sum().round(2)
     mini_table = dash_table.DataTable(
         id='mini-investment-table',
         columns=[{'name': i, 'id': i} for i in mini_table_data.columns],
