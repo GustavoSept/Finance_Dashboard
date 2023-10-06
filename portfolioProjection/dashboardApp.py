@@ -24,6 +24,10 @@ portfolioSettings = {
 app = Flask(__name__)
 dash_app = dash.Dash(__name__, server=app, external_stylesheets=[dbc.themes.BOOTSTRAP], routes_pathname_prefix='/dash/')
 
+TOOLTIP_STYLE = {"background-color": "black", "color": "white", "border-radius": "5px"}
+LABEL_STYLE = {'font-weight': 'bold'}
+H6_STYLE = {'textAlign': 'center', 'padding': '5px', 'fontWeight': 'bold', 'fontStyle': 'italic'}
+
 dash_app.layout = dbc.Container([
     dbc.Row(
         dbc.Col([
@@ -31,53 +35,158 @@ dash_app.layout = dbc.Container([
             
             # Investment Settings
             html.Div([
-                html.Label('Investment Type', style={'font-weight': 'bold'}),
-                dcc.Input(id='investment-type', type='text', placeholder='Enter Investment Type', style={'width': '100%'}),
-                
-                html.Label('Ideal Proportion (%)', style={'font-weight': 'bold'}),
+                html.H6('Investment Settings', style={**H6_STYLE, 'color': '#0a8a06'}),
+                dbc.Row([
+                    dbc.Col([
+                        html.Label('Investment Type', style=LABEL_STYLE),
+                        dcc.Input(id='investment-type', type='text', placeholder='Enter Investment Type', style={'width': '100%'}),
+                        dbc.Tooltip("Enter the name or code of the investment",
+                                    target="investment-type",
+                                    style=TOOLTIP_STYLE,
+                                    delay={"show": 450, "hide": 100},
+                                    )
+                    ], width=6, align="center"),
+                    
+                    dbc.Col([
+                        html.Label('Risk Strategy', style=LABEL_STYLE),
+                        dcc.Dropdown(id='risk-strategy', options=[
+                            {'label': 'Conservative', 'value': 'conservative'},
+                            {'label': 'Medium', 'value': 'medium'},
+                            {'label': 'Risky', 'value': 'risky'}
+                        ], value='risky'),
+                        dbc.Tooltip("Set selling-point distance from ideal proportion. The riskier, the less often the asset is sold.",
+                                    target="risk-strategy",
+                                    style=TOOLTIP_STYLE,
+                                    delay={"show": 450, "hide": 100},
+                                    )
+                    ], width=6, align="center")
+                ]),
+
+                html.Label('Ideal Proportion (%)', style=LABEL_STYLE),
                 dcc.Slider(id='ideal-proportion-slider', min=0, max=100, step=1, value=50, 
                            marks={i: str(i) + "%" for i in range(0, 101, 10)}),
+                dbc.Tooltip("Set the desired portfolio percentage for this investment. This slider can also be treated as weighted proportions.",
+                            target="ideal-proportion-slider",
+                            style=TOOLTIP_STYLE,
+                            delay={"show": 450, "hide": 100},
+                            ),
                 
-                html.Label('Risk Strategy', style={'font-weight': 'bold'}),
-                dcc.Dropdown(id='risk-strategy', options=[
-                    {'label': 'Conservative', 'value': 'conservative'},
-                    {'label': 'Medium', 'value': 'medium'},
-                    {'label': 'Risky', 'value': 'risky'}
-                ], value='risky'),
+                dbc.Row([
+                    dbc.Col([
+                        html.Label('Expected Growth (%)', style=LABEL_STYLE),
+                        dcc.Input(id='expected-growth', type='number', placeholder='Enter Expected Growth (%)', value=6, style={'width': '100%'}),
+                        dbc.Tooltip("Input expected annual growth for the asset (in %).",
+                                    target="expected-growth",
+                                    style=TOOLTIP_STYLE,
+                                    delay={"show": 450, "hide": 100},
+                                    )
+                    ], width=4, align="center"),
 
-                html.Label('Expected Growth (%)', style={'font-weight': 'bold'}),
-                dcc.Input(id='expected-growth', type='number', placeholder='Enter Expected Growth (%)', value=6, style={'width': '100%'}),
-                
-                dcc.Checklist(id='growth-decay', options=[
-                    {'label': 'Enable Growth Decay', 'value': 'True'}
-                ], value=[]),
+                    dbc.Col([
+                        html.Label('Asset Volatility', style=LABEL_STYLE),
+                        dcc.Dropdown(id='asset-volatility', options=[
+                            {'label': 'Low', 'value': 'low'},
+                            {'label': 'Mid', 'value': 'mid'},
+                            {'label': 'High', 'value': 'high'}
+                        ], disabled=True, value='high'),
+                        dbc.Tooltip("Set how volatile the price of the asset is.",
+                                        target="asset-volatility",
+                                        style=TOOLTIP_STYLE,
+                                        delay={"show": 450, "hide": 100},
+                                        )                        
+                    ], width=4, align="center"),
 
-                dcc.Checklist(id='random-growth-check', options=[
-                    {'label': 'Enable Random Growth', 'value': 'True'}
-                ], value=[]),
-                
-                html.Label('Asset Volatility', style={'font-weight': 'bold'}),
-                dcc.Dropdown(id='asset-volatility', options=[
-                    {'label': 'Low', 'value': 'low'},
-                    {'label': 'Mid', 'value': 'mid'},
-                    {'label': 'High', 'value': 'high'}
-                ], disabled=True, value='high')
-            ], style={'background': '#f7f7f7', 'padding': '15px', 'borderRadius': '5px'}),
+                    dbc.Col([
+                        dcc.Checklist(id='growth-decay', options=[
+                            {'label': 'Enable Growth Decay', 'value': 'True'}
+                        ], value=[]),
+                        dbc.Tooltip("If turned on, expected growth linearly decays close to the median growth.",
+                                    target="growth-decay",
+                                    style=TOOLTIP_STYLE,
+                                    delay={"show": 450, "hide": 100},
+                                    ),
 
+                        dcc.Checklist(id='random-growth-check', options=[
+                            {'label': 'Enable Random Growth', 'value': 'True'}
+                        ], value=[]),
+                        dbc.Tooltip("If turned on, volatility cycles are calculated for the asset.",
+                                    target="random-growth-check",
+                                    style=TOOLTIP_STYLE,
+                                    delay={"show": 450, "hide": 100},
+                                    )                        
+                    ], width=4, align="center")
+                    
+                ]),
+            ], style={'background': '#f5f5f5', 'padding': '2px 15px 15px 15px', 'borderRadius': '5px'}),
+            
+            html.Br(),
+
+            # Advanced Settings
+            html.Div([
+                html.H6('Advanced Settings', style={**H6_STYLE, 'color': '#f26c0c'}),
+                dbc.Row([
+                    dbc.Col([
+                        html.Label('Volatility Cycle Duration (in years)', style=LABEL_STYLE),
+                        dcc.Slider(id='volatility-duration-slider', min=0, max=15, step=1, value=2, 
+                                marks={i: str(i) for i in range(0, 16, 5)}),
+                        dbc.Tooltip("Volatility Cycles keep the mean asset price intact, it just impacts the spread of the volatility.",
+                                    target="volatility-duration-slider",
+                                    style=TOOLTIP_STYLE,
+                                    delay={"show": 450, "hide": 100},
+                                    ),
+
+                        html.Label('Volatility Magnitude', style=LABEL_STYLE),
+                        dcc.Input(id='volatility-magnitude', type='number', placeholder='Enter Investment Amount', value=0.5, style={'width': '100%'}),
+                        dbc.Tooltip("Set how intense the volatility cycles are.",
+                                    target="volatility-magnitude",
+                                    style=TOOLTIP_STYLE,
+                                    delay={"show": 450, "hide": 100},
+                                    )
+
+                    ], width=6, align="center"),
+
+                    dbc.Col([
+                        html.Label('Bull-Bear Cycle Duration (in years)', style=LABEL_STYLE),
+                        dcc.Slider(id='bullbear-duration-slider', min=0, max=15, step=1, value=2,
+                                marks={i: str(i) for i in range(0, 16, 5)}),
+                        dbc.Tooltip("Bull-Bear Cycles alter the mean price of the asset, up and down.",
+                                    target="bullbear-duration-slider",
+                                    style=TOOLTIP_STYLE,
+                                    delay={"show": 450, "hide": 100},
+                                    ),
+
+                        html.Label('Bull-Bear Magnitude', style=LABEL_STYLE),
+                        dcc.Input(id='bullbear-magnitude', type='number', placeholder='Enter Investment Amount', value=0.5, style={'width': '100%'}),
+                        dbc.Tooltip("Set how intense the Bull-Bear cycles are.",
+                                    target="bullbear-magnitude",
+                                    style=TOOLTIP_STYLE,
+                                    delay={"show": 450, "hide": 100},
+                                    )
+                    ], width=6, align="center")
+                ])
+            ], style={'background': '#f5f5f5', 'padding': '2px 15px 15px 15px', 'borderRadius': '5px'}),
+            
             html.Br(),
 
             # Portfolio Settings
             html.Div([
-                html.Label('Investment Starting Point', style={'font-weight': 'bold'}),
-                dcc.Input(id='investment-start-amount', type='number', placeholder='Enter Investment Amount', value=1000, style={'width': '100%'}),
+                html.H6('Portfolio Settings', style={**H6_STYLE, 'color': '#55bee0'}),
+                dbc.Row([
+                    dbc.Col([
+                        html.Label('Investment Starting Point', style=LABEL_STYLE),
+                        dcc.Input(id='investment-start-amount', type='number', placeholder='Enter Investment Amount', value=1000, style={'width': '100%'})
+                    ], width=6, align="center"),
+                    
+                    dbc.Col([
+                        html.Label('Monthly Investment', style=LABEL_STYLE),
+                        dcc.Input(id='investment-monthly-amount', type='number', placeholder='Enter Investment Amount', value=100, style={'width': '100%'})
+                    ], width=6, align="center")
+                ]),
                 
-                html.Label('Monthly Investment', style={'font-weight': 'bold'}),
-                dcc.Input(id='investment-monthly-amount', type='number', placeholder='Enter Investment Amount', value=100, style={'width': '100%'}),
-                
-                html.Label('Investment Time (years)', style={'font-weight': 'bold'}),
+                html.Label('Investment Time (years)', style=LABEL_STYLE),
                 dcc.Slider(id='investment-time-slider', min=0, max=40, step=1, value=2, 
                            marks={i: str(i) for i in range(0, 41, 5)})
-            ], style={'background': '#e6e6e6', 'padding': '15px', 'borderRadius': '5px'}),
+            ], style={'background': '#f5f5f5', 'padding': '2px 15px 15px 15px', 'borderRadius': '5px'}),
 
             html.Br(),
 
