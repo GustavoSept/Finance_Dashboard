@@ -22,6 +22,7 @@ portfolioSettings = {
 
 
 app = Flask(__name__)
+server = app.server
 dash_app = dash.Dash(__name__, server=app, external_stylesheets=[dbc.themes.BOOTSTRAP], routes_pathname_prefix='/dash/')
 
 TOOLTIP_STYLE = {"background-color": "black", "color": "white", "border-radius": "5px"}
