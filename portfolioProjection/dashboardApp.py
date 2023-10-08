@@ -512,11 +512,12 @@ def calc_portfolio(df, portfolioSettings):
     results = []
 
     for week in range(1, investmentTime_inWeeks + 1):
-        # Getting precalculated values for Decay Growth (where True in decayMask)
-        df.loc[decayMask, 'Expected Growth (%)'] = decay_2DList[decayMask, week-1]
+        # Getting precalculated values for Decay Growth
+        weekGrowthValues = decay_2DList[:, week-1]
 
-        # Ccompound interest conversion from annual to weekly growth
-        weekGrowth = (1 + df['Expected Growth (%)']) ** (1/52) - 1
+        # Compound interest conversion from annual to weekly growth
+        weekGrowth = (1 + weekGrowthValues) ** (1/52) - 1
+        
         # skipping calculation if there's no randomGrowth checked
         if df['Random Growth'].any():
             weekGrowth *=  random_values[week - 1]
@@ -526,8 +527,6 @@ def calc_portfolio(df, portfolioSettings):
         currentAmount += currentAmount * weekGrowth
         
         # -------------------- Rebalancing Portfolio Section
-        temp_initialCurrentAmount = currentAmount
-
         thresholdInvestment = thresholdProportion * currentAmount.sum()
         idealInvestment = df['Ideal Proportion (%)'] * currentAmount.sum()
 
