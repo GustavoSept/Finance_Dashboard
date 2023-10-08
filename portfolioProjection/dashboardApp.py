@@ -484,8 +484,9 @@ def calc_portfolio(df, portfolioSettings):
             return (np.sin((weeks[:, np.newaxis] - bb_phaseShift) * transformed_trend_Dur * np.pi) * trend_Mag)
         
         trendCycle = np.maximum(trendCycle_func(weeks, transformed_trend_Dur, bb_phaseShift, trend_Mag),
-                        trendCycle_func(weeks, transformed_trend_Dur, bb_phaseShift, trend_Mag = min(0.995, trend_Mag)))
-        
+                        trendCycle_func(weeks, transformed_trend_Dur, bb_phaseShift, trend_Mag = np.minimum(0.995, trend_Mag)))
+
+
         # Create an array of random numbers with shape (investmentTime_inWeeks, number_of_rows)
         random_nums = np.array([np.random.normal(1 * (1+trendCycle[i]), randomStd * volatilityCycle[i]) 
                                 for i in range(len(weeks))])
