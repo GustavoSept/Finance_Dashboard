@@ -384,6 +384,8 @@ def calc_portfolio(df, portfolioSettings):
 
     if investments:
         df = pd.DataFrame(investments)
+    else:
+        return no_update
     
     
     startInvestment = portfolioSettings.get('Start Investment Amount', 0)
@@ -603,10 +605,10 @@ def calc_and_display_portfolio(n, investment_start_amount, investment_monthly_am
     df = pd.DataFrame(investments)
     timeline_df = calc_portfolio(df, portfolioSettings)
 
-    # When there's no data in 'investments', calc_portfolio returns a string
-    # So if there's no data, don't bother plotting
-    if isinstance(timeline_df, str):
-        return timeline_df
+    # Return early if there's no update
+    if timeline_df is no_update:
+        return ""
+
 
     # ------------------------------- calculations for plotting -------------------------------
     # Calculate the current worth of the portfolio
