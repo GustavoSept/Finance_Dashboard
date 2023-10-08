@@ -149,6 +149,21 @@ dash_app.layout = dbc.Container([
                                     target="volatility-magnitude",
                                     style=TOOLTIP_STYLE,
                                     delay={"show": 450, "hide": 100},
+                                    ),
+                        html.Label('Volatility Phase', style=LABEL_STYLE),
+                        dcc.Input(
+                            id='volatility-phase',
+                            type='number',
+                            placeholder='Enter Volatility Phase',
+                            value=0,
+                            style={'width': '100%'},
+                            min = 0,
+                            max = 1,
+                            ),
+                        dbc.Tooltip("Set where the cycle should begin. 0 starts at peak stability. 1 starts at peak volatility.",
+                                    target="volatility-phase",
+                                    style=TOOLTIP_STYLE,
+                                    delay={"show": 450, "hide": 100},
                                     )
 
                     ], width=6, align="center"),
@@ -175,6 +190,21 @@ dash_app.layout = dbc.Container([
                             ),
                         dbc.Tooltip("Set how intense the Bull-Bear cycles are.",
                                     target="bullbear-magnitude",
+                                    style=TOOLTIP_STYLE,
+                                    delay={"show": 450, "hide": 100},
+                                    ),
+                        html.Label('Bull-Bear Phase', style=LABEL_STYLE),
+                        dcc.Input(
+                            id='bullbear-phase',
+                            type='number',
+                            placeholder='Enter Bull-Bear Phase',
+                            value=0,
+                            style={'width': '100%'},
+                            min = 0,
+                            max = 1,
+                            ),
+                        dbc.Tooltip("Set where the cycle should begin. 0.25 starts at peak Bear. 0.75 starts at peak Bull.",
+                                    target="bullbear-phase",
                                     style=TOOLTIP_STYLE,
                                     delay={"show": 450, "hide": 100},
                                     )
@@ -256,8 +286,10 @@ dash_app.layout = dbc.Container([
         dash.dependencies.State('growth-decay', 'value'),
         dash.dependencies.State('volatility-duration-slider', 'value'),
         dash.dependencies.State('volatility-magnitude', 'value'),
+        dash.dependencies.State('volatility-phase', 'value'),
         dash.dependencies.State('bullbear-duration-slider', 'value'),
-        dash.dependencies.State('bullbear-magnitude', 'value'),
+        dash.dependencies.State('bullbear-magnitude', 'value'),        
+        dash.dependencies.State('bullbear-phase', 'value'),
         dash.dependencies.State('div-assetsBackup', 'children')
     ]
 )
@@ -265,8 +297,8 @@ def update_investments_table(
     apply_n,clean_n,calc_n,investment_type,
     ideal_proportion,risk_strategy,investment_start_amount, investment_monthly_amount,
     investment_time,expected_growth,random_growth,
-    asset_volatility,growth_decay,volatility_duration, volatility_magnitude,
-    bullbear_duration, bullbear_magnitude, prev_investments):
+    asset_volatility,growth_decay,volatility_duration, volatility_magnitude, volatility_phase,
+    bullbear_duration, bullbear_magnitude, bullbear_phase, prev_investments):
 
     global investments
     global portfolioSettings
@@ -322,8 +354,10 @@ def update_investments_table(
         'Growth Decay': True if 'True' in growth_decay else False,
         'Volatility Duration': volatility_duration, 
         'Volatility Magnitude': volatility_magnitude,
+        'Volatility Phase': volatility_phase,
         'BullBear Duration': bullbear_duration,
-        'BullBear Magnitude': bullbear_magnitude
+        'BullBear Magnitude': bullbear_magnitude,
+        'BullBear Phase': bullbear_phase
     }
 
     investments.append(investment)
@@ -410,24 +444,47 @@ def calc_portfolio(df, portfolioSettings):
     decayMask = df['Growth Decay'] == True
 
     # ------------ Pre calculating random values section
-    def vectorized_genPseudoRdNum(weeks, randomStd, growthSum, nameLen, vol_Dur, vol_Mag, trend_Dur, trend_Mag):
+    def vectorized_genPseudoRdNum(
+            weeks,randomStd, nameLen,
+            vol_Dur,vol_Mag, volPhase,
+            trend_Dur, trend_Mag, trendPhase
+            ):
+        
+        '''
+            Generates an ndArray of 'weeks' size with pre-calculations for bull-bear cycles, and volatility cycles.
+            This function is divided in x steps:
+                - It calculates a predictable seed
+                - Transforms user input into formula-friendly versions
+                - Use Sine wave functions to oscillate both cycles
+                - Returns pseudo-random number for all weeks, with oscilating mean (bbCycles) and spread (volCycles)
+
+        '''
+
         # This makes the seed predictable, enabling the user to test portfolio performance on average if he wants to.
         nameLen_ext = np.tile(nameLen, (len(weeks), 1)) # making nameLen match the shape of weeks
-        seedCalc = ((weeks + nameLen_ext[:,0]) * growthSum).astype(int)
+        seedCalc = ((weeks + nameLen_ext[:,0])).astype(int)
         np.random.seed(seedCalc)
-        
+
         # Formula for translating years to the phased cycle 
         transformed_vol_Dur = (1/vol_Dur/52)
         transformed_trend_Dur = (1/trend_Dur/52)
+
+        # Allows the user to pick the phase of each cycle
+        vol_phaseShift = volPhase * np.pi / (transformed_trend_Dur * np.pi)
+        bb_phaseShift = trendPhase * (2 * np.pi) / (transformed_trend_Dur * np.pi)
         
-        volatilityCycle = np.abs(np.sin(weeks[:, np.newaxis] * transformed_vol_Dur * np.pi) * vol_Mag) + 1e-10
+        volatilityCycle = np.abs(
+                            np.sin(
+                                (weeks[:, np.newaxis] - vol_phaseShift) * transformed_vol_Dur * np.pi
+                            ) * vol_Mag
+                        ) + 1e-10
 
         # wrapping trend's formula in a function allows me to easily cap de-growth at -99.5%
-        def trendCycle_func(weeks, transformed_trend_Dur, trend_Mag):
-            return np.sin(weeks[:, np.newaxis] * transformed_trend_Dur * np.pi) * trend_Mag
+        def trendCycle_func(weeks, transformed_trend_Dur, bb_phaseShift, trend_Mag):
+            return (np.sin((weeks[:, np.newaxis] - bb_phaseShift) * transformed_trend_Dur * np.pi) * trend_Mag)
         
-        trendCycle = np.maximum(trendCycle_func(weeks, transformed_trend_Dur, trend_Mag),
-                        trendCycle_func(weeks, transformed_trend_Dur, trend_Mag = min(0.995, trend_Mag)))
+        trendCycle = np.maximum(trendCycle_func(weeks, transformed_trend_Dur, bb_phaseShift, trend_Mag),
+                        trendCycle_func(weeks, transformed_trend_Dur, bb_phaseShift, trend_Mag = min(0.995, trend_Mag)))
         
         # Create an array of random numbers with shape (investmentTime_inWeeks, number_of_rows)
         random_nums = np.array([np.random.normal(1 * (1+trendCycle[i]), randomStd * volatilityCycle[i]) 
@@ -440,12 +497,13 @@ def calc_portfolio(df, portfolioSettings):
         random_values = vectorized_genPseudoRdNum(
             weeks, 
             df['Asset Volatility'].to_numpy(), 
-            df['Expected Growth (%)'].sum(),
             df['Investment ID'].str.len().to_numpy(),
             df['Volatility Duration'].to_numpy(),
             df['Volatility Magnitude'].to_numpy(),
+            df['Volatility Phase'].to_numpy(),
             df['BullBear Duration'].to_numpy(),
-            df['BullBear Magnitude'].to_numpy()
+            df['BullBear Magnitude'].to_numpy(),
+            df['BullBear Phase'].to_numpy()
         )
 
     results = []
