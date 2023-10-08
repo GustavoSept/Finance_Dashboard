@@ -415,7 +415,7 @@ def calc_portfolio(df, portfolioSettings):
     df.loc[df['Random Growth'] == False, 'Asset Volatility'] = 0
 
     # Basically a linear function, with sine-wave at the higher end to smooth it.
-    thresholdInvestment = \
+    thresholdProportion = \
         np.minimum(
             (np.sin(df['Ideal Proportion (%)'] * 0.5 * np.pi)
                 + (df['Ideal Proportion (%)'] * 0.7))/ (0.7 + 1),
@@ -426,7 +426,7 @@ def calc_portfolio(df, portfolioSettings):
     
     # Initializing balances and setting actual investment amount for each investment
     totalSold = np.zeros(distinctInvestments_amount)
-    totalBought = np.zeros(distinctInvestments_amount)    
+    totalBought = np.zeros(distinctInvestments_amount)
     currentAmount = np.array(startInvestment * df['Ideal Proportion (%)'])
 
     # (if enabled) Pre-calculate Expected Growth decay
@@ -512,13 +512,11 @@ def calc_portfolio(df, portfolioSettings):
     results = []
 
     for week in range(1, investmentTime_inWeeks + 1):
-        
         # Getting precalculated values for Decay Growth (where True in decayMask)
         df.loc[decayMask, 'Expected Growth (%)'] = decay_2DList[decayMask, week-1]
 
         # Ccompound interest conversion from annual to weekly growth
-        weekGrowth= (1 + df['Expected Growth (%)']) ** (1/52) - 1
-
+        weekGrowth = (1 + df['Expected Growth (%)']) ** (1/52) - 1
         # skipping calculation if there's no randomGrowth checked
         if df['Random Growth'].any():
             weekGrowth *=  random_values[week - 1]
@@ -526,37 +524,34 @@ def calc_portfolio(df, portfolioSettings):
 
         # Casting compound growth
         currentAmount += currentAmount * weekGrowth
-
-        # -------------------- Rebalancing Portfolio Section
         
-        thresholdInvestment *= currentAmount.sum()
+        # -------------------- Rebalancing Portfolio Section
+        temp_initialCurrentAmount = currentAmount
+
+        thresholdInvestment = thresholdProportion * currentAmount.sum()
         idealInvestment = df['Ideal Proportion (%)'] * currentAmount.sum()
 
-
         # Calculate the Selling Delta based on threshold trigger
-        sellingDelta = np.maximum(currentAmount - thresholdInvestment, 0)
+        sellingDelta = np.maximum(currentAmount - thresholdInvestment, np.zeros(distinctInvestments_amount))        
 
         totalSold += sellingDelta
 
         # Update the 'Current Amount' column based on threshold trigger
         currentAmount = np.minimum(currentAmount, thresholdInvestment)
-
         soldAmount = sellingDelta.sum()
 
-        oldValues_Series = currentAmount # To calculate how much we bought, later
-
         # Calculate toBuy delta (how much each investment needs to be bought in theory)
-        toBuy_Delta = np.maximum(idealInvestment - currentAmount, 0)
+        toBuy_Delta = np.maximum(idealInvestment - currentAmount, np.zeros(distinctInvestments_amount))
 
         # Actually 'buying' assets, with the money left in 'soldAmount' + Monthly Contributions
         #  First half: transform toBuy_Delta in proportion
         # Second half: multiply each proportion with the amount of money in the balance
-        currentAmount += (toBuy_Delta * (100 / (toBuy_Delta.sum() + 1e-10)) / 100) * int(soldAmount + monthlyInvestment)
+        toBuy_Proportion = toBuy_Delta / (toBuy_Delta.sum() + 1e-10)
+        boughtValues =  toBuy_Proportion * np.round(soldAmount + (monthlyInvestment*12/52), 2)
 
-
-        totalBought += (currentAmount - oldValues_Series)
+        totalBought += boughtValues
         actualProportion = currentAmount / (currentAmount.sum() + 1e-10)
-        
+
         # --------------------------- Storing Info in TimeLine
         results.extend(list(zip(df['Investment ID'], currentAmount, [week]*distinctInvestments_amount, totalSold, totalBought, actualProportion)))
 
