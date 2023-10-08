@@ -406,9 +406,9 @@ def calc_portfolio(df, portfolioSettings):
                                                             })
 
     df['Asset Volatility'] = df['Asset Volatility'].map({
-                                                        'high': 4.5,
-                                                        'mid': 1.5,
-                                                        'low': 0.5
+                                                        'high': 10,
+                                                        'mid': 6,
+                                                        'low': 3
                                                     })
     
     # Disabling random number generation where necessary
@@ -475,25 +475,35 @@ def calc_portfolio(df, portfolioSettings):
         vol_phaseShift = volPhase * np.pi / (transformed_trend_Dur * np.pi)
         bb_phaseShift = trendPhase * (2 * np.pi) / (transformed_trend_Dur * np.pi)
         
-        volatilityCycle = np.abs(
-                            np.sin(
-                                (weeks[:, np.newaxis] - vol_phaseShift) * transformed_vol_Dur * np.pi
-                            ) * vol_Mag
-                        ) + 1e-10
+        volatilityCycle = np.maximum(
+                            np.abs(
+                                np.sin(
+                                    (weeks[:, np.newaxis] - vol_phaseShift) * transformed_vol_Dur * np.pi
+                                ) * vol_Mag
+                            ) + 1e-10,
+                        0.35) # Minimum Volatility allowed
 
-        # wrapping trend's formula in a function allows me to easily cap de-growth at -99.5%
+        # ---------------- Making Volatility Cycles have a floor. Floor is smoothed for niceness
+        def sigmoid(x):
+            return 1 / (1 + np.exp(-x))
+
+        PARAM_FLOOR = 0.5
+        scaling_factor = 1 / PARAM_FLOOR * 1.4 # empirically gives the smoothest curves for any PARAM_FLOOR
+        scaled_volatility = (volatilityCycle - PARAM_FLOOR) * scaling_factor
+
+        sVolatilityCycle = sigmoid(scaled_volatility) * (volatilityCycle - PARAM_FLOOR) + PARAM_FLOOR
+
+        # wrapping trend's formula in a function allows me to easily cap de-growth
         def trendCycle_func(weeks, transformed_trend_Dur, bb_phaseShift, trend_Mag):
             return (np.sin((weeks[:, np.newaxis] - bb_phaseShift) * transformed_trend_Dur * np.pi) * trend_Mag)
         
         trendCycle = np.maximum(trendCycle_func(weeks, transformed_trend_Dur, bb_phaseShift, trend_Mag),
-                        trendCycle_func(weeks, transformed_trend_Dur, bb_phaseShift, trend_Mag = np.minimum(0.995, trend_Mag)))
+                        trendCycle_func(weeks, transformed_trend_Dur, bb_phaseShift, trend_Mag = np.minimum(0.95, trend_Mag)))
 
 
         # Create an array of random numbers with shape (investmentTime_inWeeks, number_of_rows)
-        random_nums = np.array([np.random.normal(1 * (1+trendCycle[i]), randomStd * volatilityCycle[i]) 
+        return np.array([np.random.normal(1 * (1+trendCycle[i]), randomStd * sVolatilityCycle[i]) 
                                 for i in range(len(weeks))])
-        
-        return random_nums
 
     if df['Random Growth'].any(): # skipping pre-calculation if there's no randomGrowth checked
         weeks = np.arange(1, investmentTime_inWeeks + 1)
