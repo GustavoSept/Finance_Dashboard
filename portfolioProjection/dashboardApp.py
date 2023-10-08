@@ -136,7 +136,15 @@ dash_app.layout = dbc.Container([
                                     ),
 
                         html.Label('Volatility Magnitude Multiplier', style=LABEL_STYLE),
-                        dcc.Input(id='volatility-magnitude', type='number', placeholder='Enter Investment Amount', value=0.5, style={'width': '100%'}),
+                        dcc.Input(
+                            id='volatility-magnitude',
+                            type='number',
+                            placeholder='Enter Investment Amount',
+                            value=1,
+                            style={'width': '100%'},
+                            min = 0,
+                            max = 5,
+                            ),
                         dbc.Tooltip("Set how intense the volatility cycles are.",
                                     target="volatility-magnitude",
                                     style=TOOLTIP_STYLE,
@@ -156,7 +164,15 @@ dash_app.layout = dbc.Container([
                                     ),
 
                         html.Label('Bull-Bear Magnitude Multiplier', style=LABEL_STYLE),
-                        dcc.Input(id='bullbear-magnitude', type='number', placeholder='Enter Investment Amount', value=0.5, style={'width': '100%'}),
+                        dcc.Input(
+                            id='bullbear-magnitude',
+                            type='number',
+                            placeholder='Enter Investment Amount',
+                            value=1,
+                            style={'width': '100%'},
+                            min = 0,
+                            max = 5,
+                            ),
                         dbc.Tooltip("Set how intense the Bull-Bear cycles are.",
                                     target="bullbear-magnitude",
                                     style=TOOLTIP_STYLE,
@@ -354,9 +370,9 @@ def calc_portfolio(df, portfolioSettings):
                                                             })
 
     df['Asset Volatility'] = df['Asset Volatility'].map({
-                                                        'high': 15.25,
-                                                        'mid': 3.5,
-                                                        'low': 1
+                                                        'high': 4.5,
+                                                        'mid': 1.5,
+                                                        'low': 0.5
                                                     })
     
     # Disabling random number generation where necessary
@@ -405,7 +421,13 @@ def calc_portfolio(df, portfolioSettings):
         transformed_trend_Dur = (1/trend_Dur/52)
         
         volatilityCycle = np.abs(np.sin(weeks[:, np.newaxis] * transformed_vol_Dur * np.pi) * vol_Mag) + 1e-10
-        trendCycle = np.sin(weeks[:, np.newaxis] * transformed_trend_Dur * np.pi) * trend_Mag - 1e-10
+
+        # wrapping trend's formula in a function allows me to easily cap de-growth at -99.5%
+        def trendCycle_func(weeks, transformed_trend_Dur, trend_Mag):
+            return np.sin(weeks[:, np.newaxis] * transformed_trend_Dur * np.pi) * trend_Mag
+        
+        trendCycle = np.maximum(trendCycle_func(weeks, transformed_trend_Dur, trend_Mag),
+                        trendCycle_func(weeks, transformed_trend_Dur, trend_Mag = min(0.995, trend_Mag)))
         
         # Create an array of random numbers with shape (investmentTime_inWeeks, number_of_rows)
         random_nums = np.array([np.random.normal(1 * (1+trendCycle[i]), randomStd * volatilityCycle[i]) 
