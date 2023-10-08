@@ -139,7 +139,7 @@ dash_app.layout = dbc.Container([
                         dcc.Input(
                             id='volatility-magnitude',
                             type='number',
-                            placeholder='Enter Investment Amount',
+                            placeholder='Enter Volatility Magnitude',
                             value=1,
                             style={'width': '100%'},
                             min = 0,
@@ -182,7 +182,7 @@ dash_app.layout = dbc.Container([
                         dcc.Input(
                             id='bullbear-magnitude',
                             type='number',
-                            placeholder='Enter Investment Amount',
+                            placeholder='Enter Bull-Bear Magnitude',
                             value=1,
                             style={'width': '100%'},
                             min = 0,
@@ -607,12 +607,17 @@ def calc_and_display_portfolio(n, investment_start_amount, investment_monthly_am
     if isinstance(timeline_df, str):
         return timeline_df
 
-
-     # Calculate the current worth of the portfolio
+    # ------------------------------- calculations for plotting -------------------------------
+    # Calculate the current worth of the portfolio
     current_worth = timeline_df[timeline_df['Week'] == timeline_df['Week'].max()]['Current Amount ($)'].sum()
     
     # Calculate the percentage growth compared to 'Start Investment Amount'
     percentage_growth = ((current_worth - investment_start_amount) / investment_start_amount) * 100
+
+    # Converting Weeks to Years
+    timeline_df['Current Year'] = timeline_df['Week'] // 52
+
+    # ------------------------------- Plotting -------------------------------
 
     # Summary Info
     summary_div = html.Div([
@@ -627,7 +632,7 @@ def calc_and_display_portfolio(n, investment_start_amount, investment_monthly_am
             grouped_df,
             names='Investment ID',
             values='Actual Proportion (%)',
-            title="Investment ID Distribution"
+            title="Investments Distribution"
             )
     )
 
@@ -638,18 +643,21 @@ def calc_and_display_portfolio(n, investment_start_amount, investment_monthly_am
             x='Week',
             y='Current Amount ($)',
             color='Investment ID',
-            title="Current Amount ($) through Time by Investment ID"
+            title="Current Amount ($) through Time by Investment ID",
+            hover_data=['Current Year']
             )
     )
 
     # Create the Line Chart for the Total Amount
     priceHistory = timeline_df.groupby('Week', as_index=False)['Current Amount ($)'].sum()
+    priceHistory['Current Year'] = priceHistory['Week'] // 52
     line_chart_total = dcc.Graph(
         figure=px.line(
             priceHistory,
             x='Week',
             y='Current Amount ($)',
-            title="Total Amount ($) through Time"
+            title="Total Amount ($) through Time",
+            hover_data= ['Current Year']
             )
     )
 
