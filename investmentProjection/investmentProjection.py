@@ -1,4 +1,5 @@
 import dash
+import dash_bootstrap_components as dbc
 from dash import dcc, html
 from dash.dependencies import Input, Output
 import plotly.graph_objs as go
@@ -8,7 +9,8 @@ import pandas as pd
 app = dash.Dash(__name__)
 
 # External stylesheets to make it prettier
-external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+external_stylesheets = [dbc.themes.BOOTSTRAP]
+
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
 app.layout = html.Div(style={
@@ -17,58 +19,65 @@ app.layout = html.Div(style={
     'padding': '10px',
     'border': '1px solid #ddd',
     'borderRadius': '5px',
-    'boxShadow': '2px 2px 20px #aaa'
+    'width': '75%', 
+    'marginLeft': '12.5%', 
+    'marginRight': '12.5%'
 }, children=[
     html.H1("Compound Interest Investment Calculator", style={
         'textAlign': 'center',
         'marginBottom': '30px'
     }),
-    
-    # Sliders & Input boxes
-    html.Div(style={
+
+    dbc.Row([
+        # Column 1
+        dbc.Col([
+            html.Div([
+                html.Label("Investment Time (in years)"),
+                dcc.Slider(
+                    id='investmentTime-slider',
+                    min=1,
+                    max=50,
+                    value=20,
+                    marks={i: '{}'.format(i) for i in range(0, 51, 5)},
+                    step=1
+                )
+            ], style={'marginBottom': '20px'}),
+            
+            html.Div([
+                html.Label("Yield Rate (in annual %) "),
+                dcc.Input(id='yieldRate-input', value=15, type='number')
+            ], style={'marginBottom': '20px'}),
+            
+            html.Div([
+                html.Label("Initial Contribution "),
+                dcc.Input(id='initialContribution-input', value=0, type='number')
+            ], style={'marginBottom': '20px'}),
+        ], width=6, align="center"),
+
+        # Column 2
+        dbc.Col([
+            html.Div([
+                html.Label("Monthly Contributions "),
+                dcc.Input(id='monthlyContributions-input', value=500, type='number')
+            ], style={'marginBottom': '20px'}),
+            
+            html.Div([
+                html.Label("Yearly Productivity Gain (in %) "),
+                dcc.Input(id='yearlyGainOnContributions-input', value=3, type='number')
+            ], style={'marginBottom': '20px'}),
+            
+            html.Div([
+                html.Label("Expected Inflation (in %) "),
+                dcc.Input(id='expectedInflation-input', value=3.5, type='number')
+            ], style={'marginBottom': '20px'}),
+        ], width=6, align="center")
+    ], style={
         'marginBottom': '30px',
         'border': '1px solid #ccc',
         'padding': '20px',
         'borderRadius': '5px'
-    }, children=[
-        html.Div([
-            html.Label("Investment Time (in years)"),
-            dcc.Slider(
-                id='investmentTime-slider',
-                min=1,
-                max=50,
-                value=20,
-                marks={i: '{}'.format(i) for i in range(0,51,5)},
-                step=1
-            )
-        ], style={'marginBottom': '20px'}),
-        
-        html.Div([
-            html.Label("Yield Rate (in annual %) "),
-            dcc.Input(id='yieldRate-input', value=15, type='number')
-        ], style={'marginBottom': '20px'}),
-        
-        html.Div([
-            html.Label("Initial Contribution "),
-            dcc.Input(id='initialContribution-input', value=0, type='number')
-        ], style={'marginBottom': '20px'}),
-        
-        html.Div([
-            html.Label("Monthly Contributions "),
-            dcc.Input(id='monthlyContributions-input', value=500, type='number')
-        ], style={'marginBottom': '20px'}),
-        
-        html.Div([
-            html.Label("Yearly Productivity Gain (in %) "),
-            dcc.Input(id='yearlyGainOnContributions-input', value=3, type='number')
-        ], style={'marginBottom': '20px'}),
-        
-        html.Div([
-            html.Label("Expected Inflation (in %) "),
-            dcc.Input(id='expectedInflation-input', value=3.5, type='number')
-        ], style={'marginBottom': '20px'}),
-    ]),
-    
+    }),
+
     # Plot
     html.Div(style={
         'marginBottom': '30px',
@@ -77,11 +86,12 @@ app.layout = html.Div(style={
         dcc.Graph(id='compound-plot')
     ]),
     
-    html.Div([
-        html.H3(id='final-balance-display', children='', style={'textAlign': 'center'}),
-        html.H3(id='comparison-display', children='', style={'textAlign': 'center'})
+    dbc.Row([
+        dbc.Col(html.H3(id='final-balance-display', children='', style={'textAlign': 'center'}), width=6),
+        dbc.Col(html.H3(id='comparison-display', children='', style={'textAlign': 'center'}), width=6)
     ], style={'textAlign': 'center'})
 ])
+
 
 def compound_interest_over_time(initialContribution,
                                 monthlyContributions,
