@@ -17,7 +17,7 @@ investments = []
 portfolioSettings = {
     'Start Investment Amount': 1000,
     'Monthly Investment': 100,
-    'Investment Time (years)': 2.5
+    'Investment Time (years)': 2
 }
 
 
@@ -233,8 +233,8 @@ dash_app.layout = dbc.Container([
                 ]),
                 
                 html.Label('Investment Time (years)', style=LABEL_STYLE),
-                dcc.Slider(id='investment-time-slider', min=0, max=MAX_INVESTMENT_TIME, step=0.5, value=2.5, 
-                           marks={i: str(i) for i in range(0, MAX_INVESTMENT_TIME+1, 2.5)})
+                dcc.Slider(id='investment-time-slider', min=0, max=MAX_INVESTMENT_TIME, step=1, value=2, 
+                           marks={i: str(i) for i in range(0, MAX_INVESTMENT_TIME+1, 1)})
             ], style={'background': '#f5f5f5', 'padding': '2px 15px 15px 15px', 'borderRadius': '5px'}),
 
             html.Br(),
@@ -255,7 +255,14 @@ dash_app.layout = dbc.Container([
 
             # Display Areas
             html.Div(id='table-div'),
-            html.Div(id='charts-div')
+            dcc.Loading(
+                id="loading-external",
+                type="default",
+                children=[
+                    html.Div(id='charts-div', style={'height': '100%'})
+                ],
+                style={'height': '100%', 'display': 'flex', 'alignItems': 'flex-start'}
+            ),
         ], width={"size": 6, "offset": 3})
     )  
 ], fluid=True, style={'marginTop': '20px'})
