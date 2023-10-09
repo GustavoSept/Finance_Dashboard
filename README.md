@@ -1,11 +1,12 @@
 # 📁 What's Inside This Repository?
 This repo contains 2 dashboards, done with Python and Dash's plotly library:
 ## [**Portfolio Investment Projection**](https://github.com/GustavoSept/Finance_Dashboard/blob/main/dashboardApp.py)
-![Main Dashboard settings]([https://i.imgur.com/ggMyzaQ.jpg = 500x405)
-![Main Dashboard summary statistics](https://i.imgur.com/oyED7fW.jpg = 500x205)
-![Main Dashboard line charts](https://i.imgur.com/CNTGnRA.jpg = 500x 357)
-
 It's the main finance dashboard. It works by receiving input from the user of each asset they own, and their properties. Then, it weekly calculates portfolio growth.
+
+<img src="https://i.imgur.com/ggMyzaQ.jpg" alt="Main Dashboard settings" width="600" >
+<img src="https://i.imgur.com/oyED7fW.jpg" alt="Main Dashboard summary statistics" width="600">
+<img src="https://i.imgur.com/CNTGnRA.jpg" alt="Main Dashboard line charts" width="600">
+
 - ***Asset properties:***
 	- **Investment ID:** Name or class of the asset
 	- **Ideal Proportion (%):** Sets the desired proportion that asset should occupy of the portfolio. The user can treat this as a weighted proportion, as the back-end treats all asset's Ideal Proportions to always sum up to 100%.
@@ -36,4 +37,7 @@ It's the main finance dashboard. It works by receiving input from the user of ea
 		- An interactive line chart with total portfolio worth over time
 ## [**Simple Compound Yield Calculator:**](https://github.com/GustavoSept/Finance_Dashboard/tree/main/investmentProjection)
 It's a simpler Dashboard that just projects annual Yield Rate into the future, and compares it with other common investments (Treasure and Stocks).
-![Secondary Dashboard Layout](https://i.imgur.com/J0gGyfr.jpg = 500x500)
+
+<img src="https://i.imgur.com/J0gGyfr.jpg" alt="Secondary Dashboard Layout" width="500">
+
+
