@@ -3,9 +3,9 @@ import dash_bootstrap_components as dbc
 from dash import dcc
 from dash import html
 from dash.dependencies import Input, Output
-from flask import Flask
 from dash import dash_table
 from dash import no_update
+from flask import Flask
 import pandas as pd
 import numpy as np
 
@@ -17,7 +17,7 @@ investments = []
 portfolioSettings = {
     'Start Investment Amount': 1000,
     'Monthly Investment': 100,
-    'Investment Time (years)': 2
+    'Investment Time (years)': 2.5
 }
 
 
@@ -28,6 +28,8 @@ server = dash_app.server
 TOOLTIP_STYLE = {"background-color": "black", "color": "white", "border-radius": "5px"}
 LABEL_STYLE = {'font-weight': 'bold'}
 H6_STYLE = {'textAlign': 'center', 'padding': '5px', 'fontWeight': 'bold', 'fontStyle': 'italic'}
+
+MAX_INVESTMENT_TIME = 20
 
 dash_app.layout = dbc.Container([
     dbc.Row(
@@ -231,8 +233,8 @@ dash_app.layout = dbc.Container([
                 ]),
                 
                 html.Label('Investment Time (years)', style=LABEL_STYLE),
-                dcc.Slider(id='investment-time-slider', min=0, max=40, step=1, value=2, 
-                           marks={i: str(i) for i in range(0, 41, 5)})
+                dcc.Slider(id='investment-time-slider', min=0, max=MAX_INVESTMENT_TIME, step=0.5, value=2.5, 
+                           marks={i: str(i) for i in range(0, MAX_INVESTMENT_TIME+1, 2.5)})
             ], style={'background': '#f5f5f5', 'padding': '2px 15px 15px 15px', 'borderRadius': '5px'}),
 
             html.Br(),
