@@ -254,7 +254,7 @@ dash_app.layout = dbc.Container([
             html.Div(id='hide-table-flag', style={'display': 'none'}),
 
             # Display Areas
-            html.Div(id='table-div'),
+            html.Div(id='table-div', style={'overflow': 'auto', 'width': '100%'}),
             dcc.Loading(
                 id="loading-external",
                 type="default",
@@ -263,7 +263,7 @@ dash_app.layout = dbc.Container([
                 ],
                 style={'height': '100%', 'display': 'flex', 'alignItems': 'flex-start'}
             ),
-        ], width={"size": 6, "offset": 3})
+        ], style={'width': '50%', 'marginLeft': '20%', 'marginRight': '20%'})
     )  
 ], fluid=True, style={'marginTop': '20px'})
 
@@ -383,7 +383,8 @@ def update_investments_table(
     return dash_table.DataTable(
         id='investment-table',
         columns=[{'name': i, 'id': i} for i in df.columns],
-        data=df.to_dict('records')
+        data=df.to_dict('records'),
+        style_table={'width': '100%', 'overflowX': 'auto'}
     ), str(investments), 'show', ''
 
 # ------------
