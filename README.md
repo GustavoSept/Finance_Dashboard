@@ -35,6 +35,17 @@ It's the main finance dashboard. It works by receiving input from the user of ea
 		- A table summarizing Total Amounts of Bought and Sold for each asset
 		- An interactive line chart for each asset's worth over time
 		- An interactive line chart with total portfolio worth over time
+- ***Possible Improvements:***
+	- GUI Overhaul
+		- Make investment table editable
+		- Add import/export capability to investment table (using .csv format, for instance)
+	- Taxes
+		- Add a way to configure profit tax payment, with possibility to set different tax brackets and exemption limits.
+		- Display how many taxes was paid, from which investment
+	- Inflation
+		- Consider inflation metric to the calculation (decreasing Expected growth in each cycle)
+		- Add a way for the user to dynamically set changes in expected inflation over time
+
 ## [**Simple Compound Yield Calculator:**](https://github.com/GustavoSept/Finance_Dashboard/tree/main/investmentProjection)
 It's a simpler Dashboard that just projects annual Yield Rate into the future, and compares it with other common investments (Treasure and Stocks).
 
